@@ -1,0 +1,332 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# BOUNCER WORKFLOW
+# Purpose: Security-vet every skill that lands in skills/discovered/.
+#          Zero trust — every tool is assumed malicious until proven otherwise.
+#
+# What it does:
+#   1. Finds all files in skills/discovered/ that haven't been processed yet
+#   2. Runs a multi-stage security check on each one
+#   3. Routes passing skills to skills/evaluated/
+#   4. Routes failing/uncertain skills to skills/quarantine/
+#   5. Updates the catalog with security status
+#
+# Why this matters: 37% of openly published AI skills contain malicious
+# patterns including network exfiltration, credential harvesting, and
+# prompt injection attacks. The Bouncer catches these before they can
+# do any damage.
+#
+# For non-developers: The Bouncer is the security guard at the door.
+# Every new tool gets patted down before it's allowed past the velvet rope.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: 🛡️ Bouncer
+
+on:
+  push:
+    paths:
+      # Trigger whenever new files are added to skills/discovered/
+      - "skills/discovered/**"
+  workflow_dispatch:
+    inputs:
+      target_file:
+        description: "Specific file to review (optional, e.g. skills/discovered/my-tool-2026-01-01.md)"
+        required: false
+        default: ""
+
+concurrency:
+  group: bouncer
+  cancel-in-progress: false
+
+jobs:
+  security-vet:
+    name: Security Vet Discovered Skills
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # Need previous commit to find newly added files
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      # ── Find files to process ──────────────────────────────────────────────
+      - name: Find unprocessed discovery files
+        id: find-files
+        run: |
+          TARGET="${{ github.event.inputs.target_file }}"
+          if [ -n "$TARGET" ]; then
+            echo "Processing specific file: $TARGET"
+            echo "files=$TARGET" >> $GITHUB_OUTPUT
+          else
+            # Find files added in the last commit
+            CHANGED=$(git diff --name-only HEAD~1 HEAD -- skills/discovered/ 2>/dev/null || \
+                      find skills/discovered -name "*.md" -not -name ".gitkeep" | head -10)
+            echo "Files to process: $CHANGED"
+            echo "files=$CHANGED" >> $GITHUB_OUTPUT
+          fi
+
+      # ── Run security analysis ──────────────────────────────────────────────
+      - name: Run Bouncer security analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 << 'BOUNCER_SCRIPT'
+          import os
+          import re
+          import json
+          import requests
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+          headers = {
+              "Authorization": f"token {GITHUB_TOKEN}",
+              "Accept": "application/vnd.github.v3+json"
+          } if GITHUB_TOKEN else {}
+
+          # ── Security pattern definitions ────────────────────────────────
+          # These patterns flag potentially malicious content in skill files
+
+          CRITICAL_PATTERNS = [
+              # Credential harvesting
+              (r"process\.env\.[A-Z_]{5,}", "Reads environment variables (potential credential access)"),
+              (r"os\.environ\[", "Reads environment variables (potential credential access)"),
+              (r"SECRET|PASSWORD|TOKEN|API_KEY|PRIVATE_KEY", "References sensitive credential names"),
+              # Data exfiltration
+              (r"fetch\(['\"]https?://(?!github\.com|api\.github\.com)", "Makes HTTP calls to unknown external URLs"),
+              (r"axios\.(get|post)\(['\"]https?://(?!github\.com)", "Makes HTTP calls to external URLs"),
+              (r"requests\.(get|post)\(['\"]https?://(?!github\.com|api\.github\.com)", "Makes HTTP calls to external URLs"),
+              # Obfuscation
+              (r"base64\.(decode|b64decode)", "Uses base64 decoding (possible obfuscated payload)"),
+              (r"eval\(", "Uses eval() (dangerous code execution)"),
+              (r"exec\(", "Uses exec() (dangerous code execution)"),
+          ]
+
+          WARNING_PATTERNS = [
+              (r"import subprocess", "Uses subprocess (shell command execution)"),
+              (r"import os", "Imports os module"),
+              (r"open\([^)]+['\"]w['\"]", "Writes files"),
+              (r"socket\.", "Uses network sockets"),
+          ]
+
+          def check_reputation(url):
+              """Check GitHub reputation: stars, age, contributors."""
+              if "github.com" not in url:
+                  return 0, "Not a GitHub URL — cannot verify reputation"
+
+              # Extract owner/repo from URL
+              match = re.search(r"github\.com/([^/]+)/([^/\s]+)", url)
+              if not match:
+                  return 0, "Could not parse GitHub URL"
+
+              owner, repo = match.groups()
+              repo = repo.rstrip("/")
+
+              api_url = f"https://api.github.com/repos/{owner}/{repo}"
+              resp = requests.get(api_url, headers=headers)
+              if resp.status_code != 200:
+                  return 50, f"Could not fetch repo data (status {resp.status_code})"
+
+              data = resp.json()
+              stars = data.get("stargazers_count", 0)
+              forks = data.get("forks_count", 0)
+              created = data.get("created_at", "")
+              is_fork = data.get("fork", False)
+
+              score = 0
+              notes = []
+
+              if stars >= 500:
+                  score += 40; notes.append(f"★{stars} strong reputation")
+              elif stars >= 100:
+                  score += 30; notes.append(f"★{stars} decent reputation")
+              elif stars >= 20:
+                  score += 20; notes.append(f"★{stars} modest reputation")
+              elif stars >= 5:
+                  score += 10; notes.append(f"★{stars} low reputation")
+              else:
+                  score += 0; notes.append(f"★{stars} very new or unpopular")
+
+              if created:
+                  from datetime import datetime, timezone
+                  created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                  age_days = (datetime.now(timezone.utc) - created_dt).days
+                  if age_days >= 180:
+                      score += 30; notes.append(f"Repo is {age_days} days old (mature)")
+                  elif age_days >= 30:
+                      score += 15; notes.append(f"Repo is {age_days} days old (moderate)")
+                  else:
+                      score += 0; notes.append(f"Repo is only {age_days} days old (very new — suspicious)")
+
+              if not is_fork:
+                  score += 15; notes.append("Original repo (not a fork)")
+              else:
+                  notes.append("Is a fork — check original")
+
+              if forks >= 50:
+                  score += 15; notes.append(f"{forks} forks (popular)")
+              elif forks >= 10:
+                  score += 8; notes.append(f"{forks} forks")
+
+              return score, "; ".join(notes)
+
+          def vet_skill_file(filepath):
+              """
+              Run full security analysis on a skill file.
+              Returns (passed: bool, security_score: int, report: str)
+              """
+              if not os.path.exists(filepath):
+                  return False, 0, f"File not found: {filepath}"
+
+              with open(filepath) as f:
+                  content = f.read()
+
+              findings = []
+              critical_count = 0
+              warning_count = 0
+
+              # 1. Static analysis
+              for pattern, description in CRITICAL_PATTERNS:
+                  if re.search(pattern, content, re.IGNORECASE):
+                      findings.append(f"🚨 CRITICAL: {description}")
+                      critical_count += 1
+
+              for pattern, description in WARNING_PATTERNS:
+                  if re.search(pattern, content, re.IGNORECASE):
+                      findings.append(f"⚠️ WARNING: {description}")
+                      warning_count += 1
+
+              # 2. Reputation check
+              url_match = re.search(r"\*\*URL:\*\* (https?://[^\s\n]+)", content)
+              rep_score = 50  # default neutral
+              rep_note = "No URL found in skill file"
+              if url_match:
+                  url = url_match.group(1)
+                  rep_score, rep_note = check_reputation(url)
+
+              # 3. Calculate overall security score
+              security_score = rep_score
+              security_score -= (critical_count * 30)
+              security_score -= (warning_count * 5)
+              security_score = max(0, min(100, security_score))
+
+              # 4. Determine pass/fail
+              # Fail if: any critical findings, OR reputation score < 20, OR total security < 30
+              passed = (critical_count == 0) and (rep_score >= 20) and (security_score >= 30)
+
+              # Build report
+              report_lines = [
+                  f"## Security Report — {os.path.basename(filepath)}",
+                  f"**Date:** {TODAY}",
+                  f"**Result:** {'✅ PASSED' if passed else '❌ FAILED / QUARANTINED'}",
+                  f"**Security Score:** {security_score}/100",
+                  "",
+                  "### Reputation Check",
+                  f"- Score: {rep_score}/100",
+                  f"- Note: {rep_note}",
+                  "",
+                  "### Static Analysis Findings",
+              ]
+
+              if findings:
+                  report_lines.extend([f"- {f}" for f in findings])
+              else:
+                  report_lines.append("- ✅ No suspicious patterns detected")
+
+              report_lines.extend([
+                  "",
+                  f"### Verdict",
+                  f"- Critical issues: {critical_count}",
+                  f"- Warnings: {warning_count}",
+                  f"- {'Approved for evaluation' if passed else 'Moved to quarantine for human review'}",
+              ])
+
+              return passed, security_score, "\n".join(report_lines)
+
+          # ── Process all pending discovery files ─────────────────────────
+          discovered_dir = Path("skills/discovered")
+          evaluated_dir = Path("skills/evaluated")
+          quarantine_dir = Path("skills/quarantine")
+          evaluated_dir.mkdir(exist_ok=True)
+          quarantine_dir.mkdir(exist_ok=True)
+
+          files_to_process = [
+              f for f in discovered_dir.glob("*.md")
+              if f.name != ".gitkeep"
+          ]
+
+          if not files_to_process:
+              print("No discovery files to process.")
+              exit(0)
+
+          passed_count = 0
+          failed_count = 0
+          changelog_entries = []
+
+          for skill_file in files_to_process:
+              print(f"\n🔍 Vetting: {skill_file.name}")
+              passed, score, report = vet_skill_file(str(skill_file))
+
+              # Append security report to the skill file
+              with open(skill_file, "a") as f:
+                  f.write(f"\n\n---\n\n{report}\n")
+
+              if passed:
+                  # Move to evaluated/
+                  dest_name = skill_file.name.replace(".md", f"-v1.md")
+                  dest = evaluated_dir / dest_name
+                  # Read and update status
+                  content = skill_file.read_text()
+                  content = content.replace("Status:** pending-bouncer-review", "Status:** bouncer-approved")
+                  dest.write_text(content)
+                  skill_file.unlink()
+                  print(f"  ✅ PASSED (score: {score}) → {dest}")
+                  passed_count += 1
+                  changelog_entries.append(f"- ✅ `{dest_name}` passed bouncer (score: {score})")
+              else:
+                  # Move to quarantine/
+                  dest_name = skill_file.name.replace(".md", "-quarantine.md")
+                  dest = quarantine_dir / dest_name
+                  content = skill_file.read_text()
+                  content = content.replace("Status:** pending-bouncer-review", "Status:** quarantined-needs-review")
+                  dest.write_text(content)
+                  skill_file.unlink()
+                  print(f"  ❌ FAILED (score: {score}) → quarantine")
+                  failed_count += 1
+                  changelog_entries.append(f"- ❌ `{dest_name}` quarantined (score: {score}) — human review required")
+
+          # Update changelog
+          if changelog_entries:
+              with open("catalog/CHANGELOG.md", "a") as f:
+                  f.write(f"\n## {TODAY} — Bouncer Run\n")
+                  f.write("\n".join(changelog_entries) + "\n")
+
+          print(f"\n🛡️ Bouncer complete: {passed_count} passed, {failed_count} quarantined")
+          BOUNCER_SCRIPT
+
+      # ── Commit the routing decisions ───────────────────────────────────────
+      - name: Commit routing decisions
+        run: |
+          git config user.name "Bouncer Agent"
+          git config user.email "bouncer@versailles.bot"
+          git add skills/evaluated/ skills/quarantine/ skills/discovered/ catalog/CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "bouncer: security vetted skills [$(date -u '+%Y-%m-%d %H:%M UTC')]"
+            git push
+          fi

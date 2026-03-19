@@ -1,0 +1,293 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EVAL WORKFLOW
+# Purpose: Test and benchmark skills in skills/evaluated/ via blind A/B
+#          testing against a raw Claude baseline.
+#
+# What it does:
+#   1. Finds skills in skills/evaluated/ that haven't been tested yet
+#   2. Builds test scenarios for each skill
+#   3. Runs the skill against a set of prompts using the Anthropic API
+#   4. Runs the same prompts WITHOUT the skill (Claude baseline)
+#   5. Scores both outputs
+#   6. If the skill improves over baseline by 15%+, promotes to skills/evolved/
+#   7. Otherwise, archives it
+#
+# For non-developers: This is like a taste test. Two chefs (one with your
+# skill, one without) both cook the same dish. A judge scores both.
+# If your chef wins by enough, they get promoted.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: 🧪 Evaluator
+
+on:
+  push:
+    paths:
+      - "skills/evaluated/**"
+  workflow_dispatch:
+    inputs:
+      target_skill:
+        description: "Specific skill file to evaluate (e.g. skills/evaluated/my-skill-v1.md)"
+        required: false
+        default: ""
+      min_improvement:
+        description: "Minimum improvement % to promote (default: 15)"
+        required: false
+        default: "15"
+
+concurrency:
+  group: evaluator
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: A/B Evaluate Skills
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install anthropic requests
+
+      - name: Run evaluator
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TARGET_SKILL: ${{ github.event.inputs.target_skill || '' }}
+          MIN_IMPROVEMENT: ${{ github.event.inputs.min_improvement || '15' }}
+        run: |
+          python3 << 'EVAL_SCRIPT'
+          import os
+          import json
+          import re
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          MIN_IMPROVEMENT = float(os.environ.get("MIN_IMPROVEMENT", "15"))
+          TARGET_SKILL = os.environ.get("TARGET_SKILL", "")
+          ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+          if not ANTHROPIC_API_KEY:
+              print("⚠️  ANTHROPIC_API_KEY not set — cannot run evals. Set it in repo secrets.")
+              print("   Go to: Settings → Secrets and variables → Actions → New repository secret")
+              exit(0)
+
+          import anthropic
+          client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+          # ── Test scenario templates ──────────────────────────────────────
+          # These are generic test prompts used to evaluate skills
+          # The skill's instructions are prepended to each test
+
+          BASE_TEST_SCENARIOS = [
+              {
+                  "id": "clarity",
+                  "prompt": "Explain what you can help me with and give me an example of something you'd do well.",
+                  "eval_criteria": "clarity, specificity, helpfulness"
+              },
+              {
+                  "id": "task_execution",
+                  "prompt": "I have a complex problem I need help with. Walk me through how you'd approach solving it.",
+                  "eval_criteria": "structure, thoroughness, actionability"
+              },
+              {
+                  "id": "edge_case",
+                  "prompt": "What are the limits of what you can help with? What should I NOT use you for?",
+                  "eval_criteria": "honesty, self-awareness, accuracy"
+              },
+          ]
+
+          def call_claude(system_prompt, user_prompt, model="claude-haiku-4-5"):
+              """Call Claude API with optional system prompt."""
+              messages = [{"role": "user", "content": user_prompt}]
+              kwargs = {"model": model, "max_tokens": 1024, "messages": messages}
+              if system_prompt:
+                  kwargs["system"] = system_prompt
+              response = client.messages.create(**kwargs)
+              return response.content[0].text
+
+          def score_response(response_text, criteria):
+              """
+              Use Claude to score a response on 0-100 scale.
+              Uses haiku for efficiency (Tier 1 task).
+              """
+              scoring_prompt = f"""You are an objective evaluator. Score this AI response on a scale of 0-100.
+
+Evaluation criteria: {criteria}
+
+Response to evaluate:
+---
+{response_text[:2000]}
+---
+
+Reply with ONLY a JSON object: {{"score": <number 0-100>, "reason": "<one sentence>"}}"""
+
+              result = call_claude(None, scoring_prompt, model="claude-haiku-4-5")
+              try:
+                  # Extract JSON from response
+                  json_match = re.search(r'\{[^}]+\}', result)
+                  if json_match:
+                      data = json.loads(json_match.group())
+                      return data.get("score", 50), data.get("reason", "")
+              except Exception:
+                  pass
+              return 50, "Could not parse score"
+
+          def evaluate_skill(skill_path):
+              """Run full A/B evaluation on a skill file."""
+              print(f"\n🧪 Evaluating: {skill_path}")
+
+              with open(skill_path) as f:
+                  skill_content = f.read()
+
+              # Extract the skill instructions (the system prompt)
+              # Skills use the content of the file as their system prompt
+              skill_system_prompt = skill_content
+
+              results = {
+                  "skill_file": skill_path,
+                  "evaluated_at": TODAY,
+                  "scenarios": [],
+                  "skill_total": 0,
+                  "baseline_total": 0,
+                  "improvement_pct": 0,
+                  "promoted": False
+              }
+
+              for scenario in BASE_TEST_SCENARIOS:
+                  print(f"  Running scenario: {scenario['id']}...")
+
+                  # A: With skill
+                  skill_response = call_claude(skill_system_prompt, scenario["prompt"])
+                  skill_score, skill_reason = score_response(skill_response, scenario["eval_criteria"])
+
+                  # B: Without skill (baseline)
+                  baseline_response = call_claude(None, scenario["prompt"])
+                  baseline_score, baseline_reason = score_response(baseline_response, scenario["eval_criteria"])
+
+                  results["scenarios"].append({
+                      "id": scenario["id"],
+                      "skill_score": skill_score,
+                      "baseline_score": baseline_score,
+                      "skill_reason": skill_reason,
+                      "baseline_reason": baseline_reason,
+                      "delta": skill_score - baseline_score
+                  })
+
+                  print(f"    Skill: {skill_score} vs Baseline: {baseline_score} (delta: {skill_score - baseline_score:+d})")
+
+              # Calculate totals
+              results["skill_total"] = sum(s["skill_score"] for s in results["scenarios"])
+              results["baseline_total"] = sum(s["baseline_score"] for s in results["scenarios"])
+
+              if results["baseline_total"] > 0:
+                  results["improvement_pct"] = (
+                      (results["skill_total"] - results["baseline_total"]) / results["baseline_total"]
+                  ) * 100
+              else:
+                  results["improvement_pct"] = 0
+
+              results["promoted"] = results["improvement_pct"] >= MIN_IMPROVEMENT
+              print(f"  📊 Improvement: {results['improvement_pct']:.1f}% (threshold: {MIN_IMPROVEMENT}%)")
+              print(f"  {'✅ PROMOTED' if results['promoted'] else '❌ NOT PROMOTED'}")
+
+              return results
+
+          # ── Find skills to evaluate ──────────────────────────────────────
+          evaluated_dir = Path("skills/evaluated")
+          evolved_dir = Path("skills/evolved")
+          archive_dir = Path("skills/archive")
+          evolved_dir.mkdir(exist_ok=True)
+          archive_dir.mkdir(exist_ok=True)
+
+          if TARGET_SKILL:
+              skills_to_eval = [Path(TARGET_SKILL)]
+          else:
+              skills_to_eval = [
+                  f for f in evaluated_dir.glob("*.md")
+                  if f.name != ".gitkeep" and "eval-report" not in f.name
+              ]
+
+          if not skills_to_eval:
+              print("No skills to evaluate.")
+              exit(0)
+
+          changelog_entries = []
+
+          for skill_path in skills_to_eval:
+              results = evaluate_skill(str(skill_path))
+
+              # Build eval report
+              report = f"""
+
+---
+
+## Evaluation Report — {TODAY}
+**Model Used:** claude-haiku-4-5 (scoring) / claude-haiku-4-5 (baseline)
+**Improvement Over Baseline:** {results['improvement_pct']:.1f}%
+**Result:** {'✅ PROMOTED to evolved/' if results['promoted'] else '❌ Archived (below threshold)'}
+
+### Scenario Results
+| Scenario | Skill Score | Baseline | Delta |
+|----------|------------|----------|-------|
+"""
+              for s in results["scenarios"]:
+                  report += f"| {s['id']} | {s['skill_score']} | {s['baseline_score']} | {s['delta']:+d} |\n"
+
+              report += f"\n**Total:** Skill {results['skill_total']} vs Baseline {results['baseline_total']}\n"
+
+              # Append report to skill file
+              with open(skill_path, "a") as f:
+                  f.write(report)
+
+              if results["promoted"]:
+                  # Move to evolved/
+                  dest_name = skill_path.name.replace("-v1.md", "-v1-evolved.md").replace(".md", "-evolved.md")
+                  dest = evolved_dir / dest_name
+                  content = skill_path.read_text()
+                  content = content.replace("Status:** bouncer-approved", "Status:** evolved-production-ready")
+                  dest.write_text(content)
+                  skill_path.unlink()
+                  changelog_entries.append(
+                      f"- ✅ `{dest_name}` promoted to evolved/ (+{results['improvement_pct']:.1f}% vs baseline)"
+                  )
+              else:
+                  # Archive it
+                  dest_name = f"{skill_path.stem}-archived-{TODAY}.md"
+                  dest = archive_dir / dest_name
+                  skill_path.rename(dest)
+                  changelog_entries.append(
+                      f"- 📦 `{skill_path.name}` archived ({results['improvement_pct']:.1f}% vs baseline, below {MIN_IMPROVEMENT}% threshold)"
+                  )
+
+          # Update changelog
+          if changelog_entries:
+              with open("catalog/CHANGELOG.md", "a") as f:
+                  f.write(f"\n## {TODAY} — Evaluator Run\n")
+                  f.write("\n".join(changelog_entries) + "\n")
+
+          EVAL_SCRIPT
+
+      - name: Commit evaluation results
+        run: |
+          git config user.name "Evaluator Agent"
+          git config user.email "evaluator@versailles.bot"
+          git add skills/ catalog/CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "eval: A/B tested skills [$(date -u '+%Y-%m-%d %H:%M UTC')]"
+            git push
+          fi

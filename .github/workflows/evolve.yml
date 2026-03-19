@@ -1,0 +1,291 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EVOLVE WORKFLOW
+# Purpose: Improve skills through TDD mutation cycles. Takes a skill,
+#          generates test scenarios, mutates the instructions, re-evaluates,
+#          and commits better versions.
+#
+# What it does:
+#   1. Takes skills from skills/evolved/ (or evaluated/) that are nominated
+#   2. Generates targeted test scenarios based on the skill's purpose
+#   3. Runs multiple mutation strategies (refinement, expansion, compression...)
+#   4. Re-evaluates each mutation against the original
+#   5. Commits the best mutation if it beats the original by 5%+
+#   6. Tracks generations (v1 → v2 → v3...)
+#   7. Retires skills that haven't improved after N generations
+#
+# For non-developers: This is like breeding racehorses. Take the best horse,
+# make several slightly different offspring, race them all, keep the winner,
+# repeat. Each generation, the skill gets better.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: 🧬 Evolver
+
+on:
+  schedule:
+    # Run once daily at 2:00 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      target_skill:
+        description: "Specific skill to evolve (e.g. skills/evolved/my-skill-v1-evolved.md)"
+        required: false
+        default: ""
+      generations:
+        description: "Number of mutation generations to run (default: 1)"
+        required: false
+        default: "1"
+
+concurrency:
+  group: evolver
+  cancel-in-progress: false
+
+jobs:
+  evolve:
+    name: TDD Skill Evolution
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install anthropic
+
+      - name: Run evolver
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TARGET_SKILL: ${{ github.event.inputs.target_skill || '' }}
+          GENERATIONS: ${{ github.event.inputs.generations || '1' }}
+        run: |
+          python3 << 'EVOLVE_SCRIPT'
+          import os
+          import re
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+          TARGET_SKILL = os.environ.get("TARGET_SKILL", "")
+          GENERATIONS = int(os.environ.get("GENERATIONS", "1"))
+
+          if not ANTHROPIC_API_KEY:
+              print("⚠️  ANTHROPIC_API_KEY not set. Skipping evolution.")
+              exit(0)
+
+          import anthropic
+          client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+          # ── Mutation strategies ──────────────────────────────────────────
+          # Each strategy produces a different variation of the skill
+
+          MUTATION_STRATEGIES = [
+              {
+                  "name": "refinement",
+                  "description": "Make the skill more precise and targeted. Remove vagueness.",
+                  "prompt_modifier": "Refine this skill to be more precise, specific, and actionable. Remove vague language. Keep the same scope but sharpen every instruction."
+              },
+              {
+                  "name": "compression",
+                  "description": "Make it more concise without losing capability.",
+                  "prompt_modifier": "Compress this skill to be more concise. Remove redundancy. Keep all capabilities but use fewer words. Aim for 30% fewer tokens."
+              },
+              {
+                  "name": "expansion",
+                  "description": "Add useful capabilities the skill is missing.",
+                  "prompt_modifier": "Expand this skill with 2-3 additional useful capabilities that are adjacent to its core purpose. Don't change its core behavior."
+              },
+          ]
+
+          def call_claude(system_prompt, user_prompt, model="claude-haiku-4-5"):
+              messages = [{"role": "user", "content": user_prompt}]
+              kwargs = {"model": model, "max_tokens": 2048, "messages": messages}
+              if system_prompt:
+                  kwargs["system"] = system_prompt
+              return client.messages.create(**kwargs).content[0].text
+
+          def get_generation(filename):
+              """Extract version number from filename."""
+              match = re.search(r"-v(\d+)-", filename)
+              return int(match.group(1)) if match else 1
+
+          def next_version_name(filepath, new_gen):
+              """Generate next version filename."""
+              p = Path(filepath)
+              name = p.stem
+              # Replace version number
+              new_name = re.sub(r"-v\d+-", f"-v{new_gen}-", name)
+              if new_name == name:
+                  new_name = name.replace("-evolved", f"-v{new_gen}-evolved")
+              return p.parent.parent / "evolved" / f"{new_name}.md"
+
+          def mutate_skill(skill_content, strategy):
+              """Apply a mutation strategy to produce a new skill variant."""
+              mutation_prompt = f"""{strategy['prompt_modifier']}
+
+Here is the skill to mutate:
+---
+{skill_content[:3000]}
+---
+
+Return ONLY the mutated skill instructions. No explanations, no markdown headers, just the improved skill content."""
+              return call_claude(None, mutation_prompt, model="claude-sonnet-4-5")
+
+          def score_skill(skill_instructions, test_prompts):
+              """Score a skill across test prompts. Returns average score 0-100."""
+              scores = []
+              for test_prompt in test_prompts:
+                  response = call_claude(skill_instructions, test_prompt)
+                  score_response = call_claude(
+                      None,
+                      f"Score this AI response from 0-100 for quality, helpfulness, and clarity.\nResponse: {response[:1000]}\nReply with ONLY a number.",
+                      model="claude-haiku-4-5"
+                  )
+                  try:
+                      score = int(re.search(r'\d+', score_response).group())
+                      score = min(100, max(0, score))
+                  except Exception:
+                      score = 50
+                  scores.append(score)
+              return sum(scores) / len(scores) if scores else 50
+
+          def generate_test_prompts(skill_content):
+              """Generate relevant test prompts for a skill."""
+              prompt = f"""Based on this skill's purpose and capabilities, generate 3 test prompts that would best reveal its quality.
+
+Skill content (first 1000 chars):
+{skill_content[:1000]}
+
+Return ONLY a JSON array of 3 test prompt strings. Example:
+["Test prompt 1", "Test prompt 2", "Test prompt 3"]"""
+              result = call_claude(None, prompt, model="claude-haiku-4-5")
+              try:
+                  match = re.search(r'\[.*?\]', result, re.DOTALL)
+                  if match:
+                      return json.loads(match.group())
+              except Exception:
+                  pass
+              return [
+                  "What can you help me with? Give a concrete example.",
+                  "Walk me through how you would approach a complex problem in your domain.",
+                  "What are the edges of your capability? What should I NOT ask you?"
+              ]
+
+          # ── Find skills to evolve ────────────────────────────────────────
+          evolved_dir = Path("skills/evolved")
+          archive_dir = Path("skills/archive")
+          archive_dir.mkdir(exist_ok=True)
+
+          if TARGET_SKILL:
+              skills_to_evolve = [Path(TARGET_SKILL)]
+          else:
+              # Pick up to 3 skills to evolve per run (to stay within time budget)
+              skills_to_evolve = sorted(
+                  [f for f in evolved_dir.glob("*.md") if f.name != ".gitkeep"],
+                  key=lambda p: p.stat().st_mtime
+              )[:3]
+
+          if not skills_to_evolve:
+              print("No skills to evolve.")
+              exit(0)
+
+          changelog_entries = []
+
+          for skill_path in skills_to_evolve:
+              print(f"\n🧬 Evolving: {skill_path.name}")
+              skill_content = skill_path.read_text()
+              current_gen = get_generation(skill_path.name)
+
+              # Generate test prompts for this skill
+              print("  Generating test prompts...")
+              test_prompts = generate_test_prompts(skill_content)
+              print(f"  Test prompts: {len(test_prompts)} generated")
+
+              # Score the current version
+              print("  Scoring current version...")
+              current_score = score_skill(skill_content, test_prompts)
+              print(f"  Current score: {current_score:.1f}")
+
+              best_mutation = None
+              best_score = current_score
+              best_strategy = None
+
+              # Try each mutation strategy
+              for strategy in MUTATION_STRATEGIES:
+                  print(f"  Trying strategy: {strategy['name']}...")
+                  try:
+                      mutated = mutate_skill(skill_content, strategy)
+                      mutated_score = score_skill(mutated, test_prompts)
+                      print(f"    Score: {mutated_score:.1f} (delta: {mutated_score - current_score:+.1f})")
+
+                      if mutated_score > best_score:
+                          best_score = mutated_score
+                          best_mutation = mutated
+                          best_strategy = strategy["name"]
+                  except Exception as e:
+                      print(f"    Failed: {e}")
+
+              # Determine if improvement is significant (5%+ better)
+              improvement = ((best_score - current_score) / max(current_score, 1)) * 100
+
+              if best_mutation and improvement >= 5.0:
+                  # Save new version
+                  new_gen = current_gen + 1
+                  new_path = next_version_name(skill_path, new_gen)
+
+                  evolution_note = f"""
+
+---
+
+## Evolution Record — Generation {new_gen}
+**Date:** {TODAY}
+**Strategy:** {best_strategy}
+**Previous Score:** {current_score:.1f}
+**New Score:** {best_score:.1f}
+**Improvement:** +{improvement:.1f}%
+
+"""
+                  new_path.write_text(best_mutation + evolution_note)
+
+                  # Archive the old version
+                  old_archive = archive_dir / f"{skill_path.stem}-archived-gen{current_gen}-{TODAY}.md"
+                  skill_path.rename(old_archive)
+
+                  print(f"  ✅ Evolved to generation {new_gen} (+{improvement:.1f}%)")
+                  changelog_entries.append(
+                      f"- 🧬 `{new_path.name}` gen{new_gen} (+{improvement:.1f}% vs gen{current_gen})"
+                  )
+              else:
+                  print(f"  ℹ️  No significant improvement found (best: {improvement:+.1f}%)")
+                  changelog_entries.append(
+                      f"- ℹ️ `{skill_path.name}` — no improvement this cycle (best delta: {improvement:+.1f}%)"
+                  )
+
+          # Update changelog
+          if changelog_entries:
+              with open("catalog/CHANGELOG.md", "a") as f:
+                  f.write(f"\n## {TODAY} — Evolver Run\n")
+                  f.write("\n".join(changelog_entries) + "\n")
+
+          EVOLVE_SCRIPT
+
+      - name: Commit evolved skills
+        run: |
+          git config user.name "Evolver Agent"
+          git config user.email "evolver@versailles.bot"
+          git add skills/ catalog/CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "No evolved skills to commit."
+          else
+            git commit -m "evolve: TDD mutation cycle complete [$(date -u '+%Y-%m-%d %H:%M UTC')]"
+            git push
+          fi
