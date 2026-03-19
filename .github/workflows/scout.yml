@@ -1,0 +1,355 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SCOUT WORKFLOW
+# Purpose: Discover new AI tools, MCP servers, Claude skills, and plugins on
+#          GitHub. Runs every 6 hours and can be triggered manually.
+#
+# What it does:
+#   1. Searches GitHub for trending repositories in key categories
+#   2. Checks Anthropic and ModelContextProtocol orgs for new releases
+#   3. Scores each discovery against our CRITERIA.md rubric
+#   4. Saves results to skills/discovered/ and catalog/
+#   5. Commits the findings and triggers the Bouncer workflow
+#
+# For non-developers: This is like a web spider that wakes up every 6 hours,
+# crawls GitHub looking for useful AI tools, gives each one a score,
+# and saves the results for the security team (Bouncer) to check.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: 🔭 Scout
+
+on:
+  schedule:
+    # Run every 6 hours (at 0:00, 6:00, 12:00, 18:00 UTC)
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      search_query:
+        description: "Custom GitHub search query (optional)"
+        required: false
+        default: ""
+      max_results:
+        description: "Max results per search category (default: 30)"
+        required: false
+        default: "30"
+
+# Only allow one scout run at a time to prevent duplicate discoveries
+concurrency:
+  group: scout
+  cancel-in-progress: false
+
+jobs:
+  scout:
+    name: Scout GitHub for AI Tools
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write   # To commit discovered tools
+      issues: write     # To create issues for notable finds
+
+    steps:
+      # ── Step 1: Check out the repository ──────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ── Step 2: Set up Python environment ─────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests python-dateutil
+
+      # ── Step 3: Run the scout script ──────────────────────────────────────
+      # This script searches GitHub for powerful AI tools and scores them
+      - name: Run scout
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX_RESULTS: ${{ github.event.inputs.max_results || '30' }}
+          CUSTOM_QUERY: ${{ github.event.inputs.search_query || '' }}
+        run: |
+          python3 << 'SCOUT_SCRIPT'
+          import os
+          import json
+          import requests
+          from datetime import datetime, timezone
+          from dateutil.parser import parse as parse_date
+
+          GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+          MAX_RESULTS = int(os.environ.get("MAX_RESULTS", "30"))
+          CUSTOM_QUERY = os.environ.get("CUSTOM_QUERY", "")
+          TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+          headers = {
+              "Authorization": f"token {GITHUB_TOKEN}",
+              "Accept": "application/vnd.github.v3+json",
+              "X-GitHub-Api-Version": "2022-11-28"
+          }
+
+          # ── Search categories ────────────────────────────────────────────
+          # Each entry: (query, category_name)
+          SEARCH_QUERIES = [
+              ("model-context-protocol server in:name,description,topics", "MCP Server"),
+              ("claude skill prompt in:name,description,topics language:markdown", "Claude Skill"),
+              ("claude agent workflow automation in:name,description stars:>50", "AI Agent"),
+              ("anthropic claude plugin extension in:name,description stars:>20", "Plugin"),
+              ("mcp server tools claude in:readme stars:>30", "MCP Server"),
+          ]
+
+          # Also check these orgs directly for new releases
+          TRUSTED_ORGS = [
+              "anthropics",
+              "modelcontextprotocol",
+              "anthropic-cookbook",
+          ]
+
+          def search_github(query, per_page=None):
+              """Search GitHub repositories."""
+              url = "https://api.github.com/search/repositories"
+              params = {
+                  "q": query,
+                  "sort": "updated",
+                  "order": "desc",
+                  "per_page": per_page or MAX_RESULTS
+              }
+              resp = requests.get(url, headers=headers, params=params)
+              if resp.status_code == 200:
+                  return resp.json().get("items", [])
+              else:
+                  print(f"  Warning: search failed ({resp.status_code}): {query}")
+                  return []
+
+          def score_repo(repo):
+              """
+              Score a repository on 5 dimensions (each 0-20, total 0-100).
+              Based on agents/scout/CRITERIA.md
+              """
+              score = 0
+              reasons = []
+
+              # 1. Popularity / Social Proof (0-20)
+              stars = repo.get("stargazers_count", 0)
+              if stars >= 1000:
+                  score += 20; reasons.append(f"★{stars} (exceptional)")
+              elif stars >= 500:
+                  score += 16; reasons.append(f"★{stars} (strong)")
+              elif stars >= 100:
+                  score += 12; reasons.append(f"★{stars} (good)")
+              elif stars >= 20:
+                  score += 8; reasons.append(f"★{stars} (modest)")
+              else:
+                  score += 4; reasons.append(f"★{stars} (low)")
+
+              # 2. Freshness / Maintenance (0-20)
+              updated = repo.get("updated_at", "")
+              if updated:
+                  updated_date = parse_date(updated)
+                  days_old = (datetime.now(timezone.utc) - updated_date).days
+                  if days_old <= 7:
+                      score += 20; reasons.append("Updated this week")
+                  elif days_old <= 30:
+                      score += 16; reasons.append("Updated this month")
+                  elif days_old <= 90:
+                      score += 12; reasons.append("Updated recently")
+                  elif days_old <= 365:
+                      score += 8; reasons.append("Updated this year")
+                  else:
+                      score += 2; reasons.append("Stale (>1yr)")
+
+              # 3. Documentation Quality proxy (0-20)
+              has_description = bool(repo.get("description"))
+              has_topics = len(repo.get("topics", [])) > 0
+              has_wiki = repo.get("has_wiki", False)
+              doc_score = (8 if has_description else 0) + (6 if has_topics else 0) + (6 if has_wiki else 0)
+              score += doc_score
+              if has_description:
+                  reasons.append("Has description")
+              if has_topics:
+                  reasons.append(f"Topics: {','.join(repo.get('topics',[])[:3])}")
+
+              # 4. Activity / Health (0-20)
+              forks = repo.get("forks_count", 0)
+              open_issues = repo.get("open_issues_count", 0)
+              if forks >= 100:
+                  score += 10
+              elif forks >= 20:
+                  score += 7
+              elif forks >= 5:
+                  score += 4
+              # Active issues = healthy project
+              if 1 <= open_issues <= 50:
+                  score += 10; reasons.append(f"{open_issues} open issues (healthy)")
+              elif open_issues == 0:
+                  score += 5; reasons.append("No open issues")
+
+              # 5. Trusted Source (0-20)
+              owner_login = repo.get("owner", {}).get("login", "").lower()
+              if owner_login in [o.lower() for o in TRUSTED_ORGS]:
+                  score += 20; reasons.append(f"Trusted org: {owner_login}")
+              elif not repo.get("fork", False):
+                  score += 10; reasons.append("Original repo")
+
+              return score, reasons
+
+          def repo_to_discovery(repo, category):
+              """Convert a GitHub repo to a discovery record."""
+              score, reasons = score_repo(repo)
+              return {
+                  "name": repo["name"],
+                  "full_name": repo["full_name"],
+                  "url": repo["html_url"],
+                  "description": repo.get("description", ""),
+                  "category": category,
+                  "stars": repo.get("stargazers_count", 0),
+                  "forks": repo.get("forks_count", 0),
+                  "language": repo.get("language", ""),
+                  "topics": repo.get("topics", []),
+                  "last_updated": repo.get("updated_at", ""),
+                  "score": score,
+                  "score_reasons": reasons,
+                  "discovered_at": TODAY,
+                  "owner": repo.get("owner", {}).get("login", ""),
+                  "is_fork": repo.get("fork", False),
+              }
+
+          # ── Run all searches ─────────────────────────────────────────────
+          print("🔭 Scout starting...")
+          all_discoveries = []
+          seen_full_names = set()
+
+          # Custom query if provided
+          if CUSTOM_QUERY:
+              print(f"  Custom query: {CUSTOM_QUERY}")
+              results = search_github(CUSTOM_QUERY)
+              for repo in results:
+                  if repo["full_name"] not in seen_full_names:
+                      seen_full_names.add(repo["full_name"])
+                      all_discoveries.append(repo_to_discovery(repo, "Custom"))
+
+          # Standard category searches
+          for query, category in SEARCH_QUERIES:
+              print(f"  Searching: {category}...")
+              results = search_github(query)
+              for repo in results:
+                  if repo["full_name"] not in seen_full_names and not repo.get("fork"):
+                      seen_full_names.add(repo["full_name"])
+                      all_discoveries.append(repo_to_discovery(repo, category))
+
+          # Check trusted orgs for recent activity
+          for org in TRUSTED_ORGS:
+              print(f"  Checking org: {org}...")
+              url = f"https://api.github.com/orgs/{org}/repos"
+              resp = requests.get(url, headers=headers, params={"sort": "updated", "per_page": 10})
+              if resp.status_code == 200:
+                  for repo in resp.json():
+                      if repo["full_name"] not in seen_full_names:
+                          seen_full_names.add(repo["full_name"])
+                          all_discoveries.append(repo_to_discovery(repo, "Trusted Org"))
+
+          print(f"  Found {len(all_discoveries)} total discoveries")
+
+          # ── Filter: only keep score >= 20 ────────────────────────────────
+          quality_discoveries = [d for d in all_discoveries if d["score"] >= 20]
+          print(f"  Quality threshold (score>=20): {len(quality_discoveries)} passed")
+
+          # ── Sort by score descending ──────────────────────────────────────
+          quality_discoveries.sort(key=lambda x: x["score"], reverse=True)
+
+          # ── Load existing catalog to avoid duplicates ─────────────────────
+          tools_catalog_path = "catalog/tools.json"
+          try:
+              with open(tools_catalog_path) as f:
+                  existing_catalog = json.load(f)
+              existing_urls = {t["url"] for t in existing_catalog.get("tools", [])}
+          except Exception:
+              existing_catalog = {"version": "1.0.0", "tools": []}
+              existing_urls = set()
+
+          # ── Write new discovery files ────────────────────────────────────
+          os.makedirs("skills/discovered", exist_ok=True)
+          new_count = 0
+
+          for discovery in quality_discoveries:
+              if discovery["url"] in existing_urls:
+                  continue  # Already in catalog
+
+              # Write individual discovery file
+              safe_name = discovery["name"].lower().replace(" ", "-").replace("/", "-")
+              filepath = f"skills/discovered/{safe_name}-{TODAY}.md"
+
+              # Don't overwrite if already discovered today
+              if os.path.exists(filepath):
+                  continue
+
+              content = f"""# {discovery['name']}
+
+**Category:** {discovery['category']}
+**Score:** {discovery['score']}/100
+**URL:** {discovery['url']}
+**Discovered:** {TODAY}
+**Status:** pending-bouncer-review
+
+## Description
+{discovery['description'] or 'No description provided.'}
+
+## Why Scored {discovery['score']}/100
+{chr(10).join(f'- {r}' for r in discovery['score_reasons'])}
+
+## Metadata
+- **Stars:** {discovery['stars']}
+- **Forks:** {discovery['forks']}
+- **Language:** {discovery['language'] or 'N/A'}
+- **Topics:** {', '.join(discovery['topics']) or 'None'}
+- **Last Updated:** {discovery['last_updated']}
+- **Owner:** {discovery['owner']}
+- **Is Fork:** {discovery['is_fork']}
+
+## Bouncer Checklist
+- [ ] Static analysis passed
+- [ ] Reputation verified
+- [ ] No credential harvesting patterns
+- [ ] No unexpected network calls
+- [ ] Approved for evaluation
+"""
+              with open(filepath, "w") as f:
+                  f.write(content)
+
+              # Add to catalog
+              existing_catalog["tools"].append(discovery)
+              existing_urls.add(discovery["url"])
+              new_count += 1
+              print(f"  + {discovery['name']} (score: {discovery['score']})")
+
+          # ── Update catalog ────────────────────────────────────────────────
+          existing_catalog["last_updated"] = TODAY
+          existing_catalog["total"] = len(existing_catalog["tools"])
+          with open(tools_catalog_path, "w") as f:
+              json.dump(existing_catalog, f, indent=2)
+
+          # ── Update changelog ──────────────────────────────────────────────
+          if new_count > 0:
+              changelog_entry = f"\n## {TODAY} — Scout Run\n- Discovered {new_count} new tools\n- Top find: {quality_discoveries[0]['name']} (score: {quality_discoveries[0]['score']})\n"
+              with open("catalog/CHANGELOG.md", "a") as f:
+                  f.write(changelog_entry)
+
+          print(f"\n✅ Scout complete: {new_count} new discoveries written")
+          SCOUT_SCRIPT
+
+      # ── Step 4: Commit any new discoveries ────────────────────────────────
+      - name: Commit discoveries
+        run: |
+          git config user.name "Scout Agent"
+          git config user.email "scout@versailles.bot"
+          git add skills/discovered/ catalog/
+          # Only commit if there are actual changes
+          if git diff --staged --quiet; then
+            echo "No new discoveries this run."
+          else
+            DISCOVERY_COUNT=$(git diff --staged --name-only | grep "skills/discovered" | wc -l)
+            git commit -m "scout: discovered ${DISCOVERY_COUNT} new tool(s) [$(date -u '+%Y-%m-%d %H:%M UTC')]"
+            git push
+            echo "Discoveries committed and pushed."
+          fi

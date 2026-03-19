@@ -1,0 +1,98 @@
+name: "🔬 Research Request"
+description: "Trigger the automated recursive research agent on a topic."
+title: "[RESEARCH] "
+labels: ["research-request", "needs-researcher"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Automated Research Request
+        The Researcher agent will pick up this issue, conduct recursive research on the topic, and produce a report in `research/findings/`. Each iteration deepens the research until it reaches your specified depth or the topic is exhausted.
+
+  - type: input
+    id: topic
+    attributes:
+      label: "Research Topic"
+      description: "What do you want researched? Be specific."
+      placeholder: "e.g. Best MCP servers for Solana blockchain data access"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Context / Background"
+      description: "What do you already know? What's the purpose of this research? What will you do with it?"
+      placeholder: |
+        I'm trying to understand X so I can build Y.
+        I already know that Z, but I'm unclear on...
+        This research will feed into...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: depth
+    attributes:
+      label: "Research Depth"
+      description: "How deep should the agent go? Deeper = more iterations = more time."
+      options:
+        - "Surface (1 iteration) — quick overview, key players, basic concepts"
+        - "Standard (3 iterations) — solid understanding, pros/cons, examples"
+        - "Deep (5 iterations) — comprehensive, edge cases, comparisons, recommendations"
+        - "Expert (7+ iterations) — exhaustive, academic-level, with caveats and open questions"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: output-format
+    attributes:
+      label: "Output Format"
+      description: "How do you want the findings delivered?"
+      options:
+        - "Executive Summary — key findings only, 1-2 pages"
+        - "Full Report — structured document with sections"
+        - "Comparison Table — side-by-side comparison of options"
+        - "Action Plan — findings + recommended next steps"
+        - "Annotated List — curated list with explanations"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: research-areas
+    attributes:
+      label: "Areas to Cover"
+      description: "Check all that apply."
+      options:
+        - label: "Current state of the art (what exists today)"
+        - label: "Key players and repositories (GitHub, companies, researchers)"
+        - label: "Technical deep-dive (how it works)"
+        - label: "Pros and cons / tradeoffs"
+        - label: "Integration with existing Versailles tools"
+        - label: "Security and risk considerations"
+        - label: "Cost and resource requirements"
+        - label: "Recommended tools / next steps"
+
+  - type: input
+    id: deadline
+    attributes:
+      label: "Desired Completion"
+      description: "When do you need this? (optional — agents run ASAP by default)"
+      placeholder: "e.g. Within 24 hours / No rush / Before end of week"
+
+  - type: textarea
+    id: related-skills
+    attributes:
+      label: "Related Skills or Prior Research"
+      description: "Any existing skills in the repo or prior findings that are relevant?"
+      placeholder: "See research/findings/prior-topic.md / related skill: skills/evolved/some-skill.md"
+
+  - type: textarea
+    id: specific-questions
+    attributes:
+      label: "Specific Questions to Answer"
+      description: "If you have specific questions you want answered, list them here."
+      placeholder: |
+        1. What are the top 5 MCP servers for X?
+        2. How does Y compare to Z in terms of performance?
+        3. Is X production-ready or still experimental?

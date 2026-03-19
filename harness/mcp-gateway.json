@@ -1,0 +1,65 @@
+{
+  "version": "1.0.0",
+  "description": "MCP gateway configuration for Versailles. Controls which MCPs each agent role can access (progressive disclosure at the tool layer).",
+  "default_access": ["filesystem", "sequential-thinking"],
+  "roles": {
+    "scout": {
+      "description": "Discovery agent — needs GitHub access to search for tools",
+      "mcps": ["github", "filesystem"],
+      "rationale": "Scout only needs GitHub API to search and filesystem to write discoveries"
+    },
+    "bouncer": {
+      "description": "Security vetting agent — needs careful analysis, no external calls",
+      "mcps": ["filesystem", "sequential-thinking", "github"],
+      "rationale": "Bouncer uses sequential-thinking for careful analysis, GitHub for reputation checks, filesystem for moving files"
+    },
+    "evaluator": {
+      "description": "A/B testing agent — works entirely with local files and Anthropic API",
+      "mcps": ["filesystem"],
+      "rationale": "Evaluator only needs to read/write skill files; Anthropic API access is via environment variable, not MCP"
+    },
+    "evolver": {
+      "description": "TDD mutation agent — needs careful reasoning for mutations",
+      "mcps": ["filesystem", "sequential-thinking"],
+      "rationale": "Evolver needs sequential-thinking for careful mutation reasoning, filesystem for version management"
+    },
+    "researcher": {
+      "description": "Recursive research agent — needs broad information access",
+      "mcps": ["github", "filesystem", "sequential-thinking", "context7"],
+      "rationale": "Researcher needs GitHub for finding repos, context7 for library docs, sequential-thinking for deep analysis"
+    },
+    "orchestrator": {
+      "description": "Top-level coordinator — can access all MCPs",
+      "mcps": ["github", "filesystem", "sequential-thinking", "context7", "claude-flow"],
+      "rationale": "Orchestrator manages all agents and needs full access to coordinate effectively"
+    }
+  },
+  "mcp_definitions": {
+    "github": {
+      "purpose": "Search repos, check releases, read files, manage issues and PRs",
+      "risk_level": "medium",
+      "requires_token": true
+    },
+    "filesystem": {
+      "purpose": "Read and write files within the repository",
+      "risk_level": "low",
+      "restricted_to": "/workspaces/Versailles"
+    },
+    "sequential-thinking": {
+      "purpose": "Step-by-step reasoning for complex analysis",
+      "risk_level": "low",
+      "requires_token": false
+    },
+    "context7": {
+      "purpose": "Real-time library and framework documentation lookup",
+      "risk_level": "low",
+      "requires_token": false
+    },
+    "claude-flow": {
+      "purpose": "Spawn and coordinate sub-agents, manage swarms",
+      "risk_level": "high",
+      "requires_token": false,
+      "note": "Only orchestrator-level agents should have this access"
+    }
+  }
+}

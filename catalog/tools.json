@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-03-19",
+  "total": 0,
+  "description": "Rated tool catalog. Auto-updated by the Scout workflow every 6 hours.",
+  "schema": {
+    "name": "string — repository name",
+    "full_name": "string — owner/repo",
+    "url": "string — GitHub URL",
+    "description": "string — what it does",
+    "category": "string — MCP Server | Claude Skill | AI Agent | Plugin | Library",
+    "stars": "number",
+    "forks": "number",
+    "language": "string",
+    "topics": "array of strings",
+    "last_updated": "string — ISO date",
+    "score": "number 0-100 — Scout scoring rubric",
+    "score_reasons": "array of strings",
+    "discovered_at": "string — YYYY-MM-DD",
+    "owner": "string — GitHub username"
+  },
+  "tools": []
+}

@@ -1,0 +1,239 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SELF-HEAL WORKFLOW
+# Purpose: Validate the integrity of the Versailles repository on every push.
+#          Catches problems before they compound.
+#
+# What it checks:
+#   1. No secrets or API keys accidentally committed
+#   2. All catalog JSON files are valid (not corrupted)
+#   3. Directory structure is intact (all required dirs exist)
+#   4. Skill files in evolved/ have reasonable content
+#
+# For non-developers: This is like a spell-checker that runs every time
+# someone saves the document. It catches obvious mistakes immediately.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: 🏥 Self-Heal
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Repository Integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ── Check 1: Secret scanning ───────────────────────────────────────────
+      # Scan for patterns that look like accidentally committed credentials
+      - name: Scan for accidentally committed secrets
+        run: |
+          python3 << 'SECRETS_SCRIPT'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          # Patterns that indicate committed secrets
+          # These are heuristic — they catch common accidental commits
+          SECRET_PATTERNS = [
+              (r'sk-ant-[a-zA-Z0-9_-]{20,}', "Anthropic API key"),
+              (r'sk-[a-zA-Z0-9]{20,}', "OpenAI-style API key"),
+              (r'ghp_[a-zA-Z0-9]{36,}', "GitHub personal access token (classic)"),
+              (r'github_pat_[a-zA-Z0-9_]{82,}', "GitHub fine-grained PAT"),
+              (r'AKIA[0-9A-Z]{16}', "AWS access key"),
+              (r'[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}', "UUID that might be a secret"),
+              (r'(?i)password\s*=\s*["\'][^"\']{8,}["\']', "Hardcoded password"),
+              (r'(?i)api_key\s*=\s*["\'][^"\']{8,}["\']', "Hardcoded API key assignment"),
+              (r'(?i)secret\s*=\s*["\'][^"\']{8,}["\']', "Hardcoded secret assignment"),
+          ]
+
+          # Files to skip (binary, git objects, known safe files)
+          SKIP_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.zip', '.gz'}
+          SKIP_DIRS = {'.git', 'node_modules', '__pycache__', '.venv'}
+          SKIP_FILES = {'CHANGELOG.md'}  # May contain example tokens in docs
+
+          issues_found = []
+
+          for filepath in Path('.').rglob('*'):
+              # Skip non-files and excluded paths
+              if not filepath.is_file():
+                  continue
+              if any(part in SKIP_DIRS for part in filepath.parts):
+                  continue
+              if filepath.suffix in SKIP_EXTENSIONS:
+                  continue
+              if filepath.name in SKIP_FILES:
+                  continue
+
+              try:
+                  content = filepath.read_text(encoding='utf-8', errors='ignore')
+              except Exception:
+                  continue
+
+              for pattern, description in SECRET_PATTERNS:
+                  matches = re.findall(pattern, content)
+                  if matches:
+                      # Exclude patterns that are clearly placeholder examples
+                      real_matches = [m for m in matches
+                                     if 'your-key' not in m.lower()
+                                     and 'example' not in m.lower()
+                                     and 'placeholder' not in m.lower()
+                                     and 'xxxx' not in m.lower()]
+                      if real_matches:
+                          issues_found.append(f"  🚨 {description} in {filepath}")
+
+          if issues_found:
+              for issue in issues_found:
+                  print(issue)
+              print(f"\nFound {len(issues_found)} potential secret(s). Review immediately!")
+              # Write to output and fail — secrets must never be committed
+              with open(os.environ.get("GITHUB_OUTPUT", "/dev/stdout"), "a") as f:
+                  f.write(f"secret_issues={len(issues_found)}\n")
+              sys.exit(1)  # Fail the workflow on secret detection
+          else:
+              print("✅ No secrets detected")
+              with open(os.environ.get("GITHUB_OUTPUT", "/dev/stdout"), "a") as f:
+                  f.write("secret_issues=0\n")
+          SECRETS_SCRIPT
+
+      # ── Check 2: Validate directory structure ──────────────────────────────
+      - name: Validate directory structure
+        run: |
+          python3 << 'STRUCTURE_SCRIPT'
+          import sys
+          from pathlib import Path
+
+          REQUIRED_DIRS = [
+              "skills/discovered",
+              "skills/quarantine",
+              "skills/evaluated",
+              "skills/evolved",
+              "skills/archive",
+              "catalog",
+              "research/topics",
+              "research/findings",
+              "agents/scout",
+              "agents/bouncer",
+              "agents/evaluator",
+              "agents/evolver",
+              "harness",
+              "docs",
+          ]
+
+          REQUIRED_FILES = [
+              "CLAUDE.md",
+              ".mcp.json",
+              "catalog/tools.json",
+              "catalog/mcps.json",
+              "catalog/plugins.json",
+              "catalog/CHANGELOG.md",
+              "agents/scout/SOUL.md",
+              "agents/bouncer/SOUL.md",
+              "agents/evaluator/SOUL.md",
+              "agents/evolver/SOUL.md",
+          ]
+
+          issues = []
+
+          for d in REQUIRED_DIRS:
+              if not Path(d).is_dir():
+                  issues.append(f"Missing directory: {d}")
+
+          for f in REQUIRED_FILES:
+              if not Path(f).is_file():
+                  issues.append(f"Missing file: {f}")
+
+          if issues:
+              print("⚠️  Structure issues found:")
+              for issue in issues:
+                  print(f"  - {issue}")
+              # Don't fail — structure issues are warnings, not blockers
+              # (files might be legitimately absent in some states)
+          else:
+              print("✅ Directory structure intact")
+          STRUCTURE_SCRIPT
+
+      # ── Check 3: Validate catalog JSON files ──────────────────────────────
+      - name: Validate catalog JSON integrity
+        run: |
+          python3 << 'JSON_SCRIPT'
+          import json
+          import sys
+          from pathlib import Path
+
+          json_files = list(Path('catalog').glob('*.json'))
+          issues = []
+
+          for json_file in json_files:
+              try:
+                  content = json_file.read_text()
+                  if content.strip():
+                      data = json.loads(content)
+                      print(f"  ✅ {json_file} — valid JSON ({len(str(data))} chars)")
+                  else:
+                      issues.append(f"Empty JSON file: {json_file}")
+              except json.JSONDecodeError as e:
+                  issues.append(f"Invalid JSON in {json_file}: {e}")
+              except Exception as e:
+                  issues.append(f"Error reading {json_file}: {e}")
+
+          if issues:
+              print("❌ JSON validation failures:")
+              for issue in issues:
+                  print(f"  - {issue}")
+              sys.exit(1)
+          else:
+              print("✅ All catalog JSON files valid")
+          JSON_SCRIPT
+
+      # ── Check 4: Validate evolved skills have content ─────────────────────
+      - name: Validate skill files
+        run: |
+          python3 << 'SKILLS_SCRIPT'
+          from pathlib import Path
+
+          MIN_SKILL_LENGTH = 50  # Characters — skills must have some content
+
+          issues = []
+          for skill_dir in ["skills/evolved", "skills/evaluated"]:
+              for skill_file in Path(skill_dir).glob("*.md"):
+                  if skill_file.name == ".gitkeep":
+                      continue
+                  content = skill_file.read_text().strip()
+                  if len(content) < MIN_SKILL_LENGTH:
+                      issues.append(f"Skill file too short ({len(content)} chars): {skill_file}")
+
+          if issues:
+              print("⚠️  Skill file warnings:")
+              for issue in issues:
+                  print(f"  - {issue}")
+          else:
+              print("✅ Skill files look healthy")
+          SKILLS_SCRIPT
+
+      # ── Summary ────────────────────────────────────────────────────────────
+      - name: Print summary
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════"
+          echo "  🏥 Self-Heal Check Complete"
+          echo "  Repo: ${{ github.repository }}"
+          echo "  Commit: ${{ github.sha }}"
+          echo "  Branch: ${{ github.ref_name }}"
+          echo "═══════════════════════════════════════"

@@ -1,0 +1,18 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-03-19",
+  "total": 0,
+  "description": "Discovered plugin and extension catalog. Auto-updated by the Scout workflow.",
+  "schema": {
+    "name": "string — plugin name",
+    "full_name": "string — owner/repo or marketplace ID",
+    "url": "string — GitHub URL or marketplace listing",
+    "description": "string — what this plugin does",
+    "platform": "string — VS Code | Claude Code | GitHub Copilot | Other",
+    "stars": "number",
+    "score": "number 0-100",
+    "discovered_at": "string — YYYY-MM-DD",
+    "install_command": "string — how to install"
+  },
+  "plugins": []
+}

@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "claude-flow": {
+      "command": "npx",
+      "args": ["-y", "@claude-flow/cli@latest", "mcp"],
+      "description": "Multi-agent orchestration: spawn swarms, parallelize work, manage agent lifecycles"
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "description": "Library documentation lookup: resolve package docs, get up-to-date API references"
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/runner/work/Versailles/Versailles"],
+      "description": "Safe file read/write within the repository"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "description": "GitHub API: search repos, check releases, read files, manage issues"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "description": "Step-by-step reasoning for complex analysis, security reviews, and research"
+    }
+  }
+}

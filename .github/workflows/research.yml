@@ -1,0 +1,330 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# RESEARCH WORKFLOW
+# Purpose: Conduct automated recursive research on a topic, triggered by
+#          GitHub Issues labeled "research-request".
+#
+# What it does:
+#   1. Reads the research request from the triggering Issue
+#   2. Conducts iterative research, each pass deepening the previous
+#   3. Saves findings to research/findings/
+#   4. Opens a PR with the completed research report
+#   5. Comments on the original Issue with a summary
+#
+# For non-developers: Create an Issue using the "Research Request" template,
+# label it "research-request", and this workflow runs automatically.
+# It will dig into the topic and come back with a detailed report.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: 🔬 Researcher
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Research topic"
+        required: true
+        default: "Latest MCP servers for AI agents"
+      depth:
+        description: "Research depth (1=surface, 3=standard, 5=deep)"
+        required: false
+        default: "3"
+      output_format:
+        description: "Output format (report/list/table/summary)"
+        required: false
+        default: "report"
+
+concurrency:
+  group: researcher-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  research:
+    name: Conduct Research
+    # Only run on issues labeled "research-request" OR manual trigger
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && github.event.label.name == 'research-request')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install anthropic requests
+
+      # ── Extract research parameters ────────────────────────────────────────
+      - name: Extract research parameters
+        id: params
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
+          ISSUE_TITLE: ${{ github.event.issue.title || '' }}
+          INPUT_TOPIC: ${{ github.event.inputs.topic || '' }}
+          INPUT_DEPTH: ${{ github.event.inputs.depth || '3' }}
+          INPUT_FORMAT: ${{ github.event.inputs.output_format || 'report' }}
+        run: |
+          python3 << 'PARAMS_SCRIPT'
+          import os
+          import re
+
+          issue_body = os.environ.get("ISSUE_BODY", "")
+          issue_title = os.environ.get("ISSUE_TITLE", "")
+          input_topic = os.environ.get("INPUT_TOPIC", "")
+
+          if input_topic:
+              topic = input_topic
+              depth = int(os.environ.get("INPUT_DEPTH", "3"))
+              fmt = os.environ.get("INPUT_FORMAT", "report")
+          else:
+              # Extract from issue title (format: "[RESEARCH] <topic>")
+              topic_match = re.search(r'\[RESEARCH\]\s*(.+)', issue_title)
+              topic = topic_match.group(1).strip() if topic_match else issue_title
+
+              # Extract depth from issue body
+              depth_match = re.search(r'(Standard|Deep|Surface|Expert)', issue_body, re.IGNORECASE)
+              depth_map = {"surface": 1, "standard": 3, "deep": 5, "expert": 7}
+              depth = depth_map.get(depth_match.group(1).lower(), 3) if depth_match else 3
+
+              # Extract format preference
+              fmt_match = re.search(r'(Full Report|Executive Summary|Comparison Table|Action Plan|Annotated List)', issue_body)
+              fmt = fmt_match.group(1).lower().replace(" ", "_") if fmt_match else "report"
+
+          # Write outputs
+          output_file = os.environ.get("GITHUB_OUTPUT", "/dev/stdout")
+          with open(output_file, "a") as f:
+              f.write(f"topic={topic}\n")
+              f.write(f"depth={depth}\n")
+              f.write(f"format={fmt}\n")
+              # Create safe filename
+              safe_topic = re.sub(r'[^a-z0-9-]', '-', topic.lower())[:50].strip('-')
+              f.write(f"safe_topic={safe_topic}\n")
+
+          print(f"Topic: {topic}")
+          print(f"Depth: {depth}")
+          print(f"Format: {fmt}")
+          PARAMS_SCRIPT
+
+      # ── Run recursive research ─────────────────────────────────────────────
+      - name: Run recursive research
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEARCH_TOPIC: ${{ steps.params.outputs.topic }}
+          RESEARCH_DEPTH: ${{ steps.params.outputs.depth }}
+          RESEARCH_FORMAT: ${{ steps.params.outputs.format }}
+          SAFE_TOPIC: ${{ steps.params.outputs.safe_topic }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
+        run: |
+          python3 << 'RESEARCH_SCRIPT'
+          import os
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+          TOPIC = os.environ.get("RESEARCH_TOPIC", "AI tools")
+          DEPTH = int(os.environ.get("RESEARCH_DEPTH", "3"))
+          FORMAT = os.environ.get("RESEARCH_FORMAT", "report")
+          SAFE_TOPIC = os.environ.get("SAFE_TOPIC", "research")
+
+          if not ANTHROPIC_API_KEY:
+              print("⚠️  ANTHROPIC_API_KEY not set. Using placeholder research.")
+              findings = f"# Research: {TOPIC}\n\nAPI key required to conduct automated research.\nPlease add ANTHROPIC_API_KEY to repository secrets."
+              Path("research/findings").mkdir(exist_ok=True)
+              output_path = f"research/findings/{SAFE_TOPIC}-{TODAY}.md"
+              Path(output_path).write_text(findings)
+              print(f"Placeholder written to {output_path}")
+              exit(0)
+
+          import anthropic
+          client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+          def research_iteration(topic, previous_findings, iteration, total_iterations):
+              """Run one research iteration, building on previous findings."""
+              if iteration == 1:
+                  prompt = f"""You are an expert researcher. Conduct thorough research on: "{topic}"
+
+Provide a comprehensive initial overview covering:
+1. What this topic is about
+2. Key players, tools, and repositories (especially on GitHub)
+3. Current state of the art (as of your knowledge cutoff)
+4. Key capabilities and limitations
+5. Most important resources and links
+
+Be specific. Name actual tools, repos, companies, and people."""
+              else:
+                  prompt = f"""You are an expert researcher conducting iterative deep research on: "{topic}"
+
+This is iteration {iteration} of {total_iterations}. 
+
+Previous research summary:
+---
+{previous_findings[-3000:]}
+---
+
+In this iteration, go DEEPER. Focus on:
+- Gaps in the previous research
+- Technical details not yet covered
+- Edge cases and nuances
+- Comparative analysis between the options found
+- Specific recommendations for someone trying to use this in a real project
+- Open questions and areas of uncertainty
+
+Build on what was found. Don't repeat basic information."""
+
+              response = client.messages.create(
+                  model="claude-sonnet-4-5",
+                  max_tokens=4096,
+                  messages=[{"role": "user", "content": prompt}]
+              )
+              return response.content[0].text
+
+          def compile_report(topic, all_iterations, fmt):
+              """Compile all iterations into a final structured report."""
+              combined = "\n\n---\n\n".join(
+                  [f"## Iteration {i+1}\n\n{text}" for i, text in enumerate(all_iterations)]
+              )
+
+              compile_prompt = f"""You are compiling a research report on: "{topic}"
+
+Here are {len(all_iterations)} iterations of research findings:
+---
+{combined[:6000]}
+---
+
+Create a well-structured final report in format: {fmt}
+
+The report should:
+- Start with an executive summary
+- Present findings in a logical structure
+- Include specific tools, repos, and resources found
+- End with concrete recommendations
+- Be actionable for someone who wants to use this knowledge
+
+Format as clean Markdown."""
+
+              response = client.messages.create(
+                  model="claude-sonnet-4-5",
+                  max_tokens=4096,
+                  messages=[{"role": "user", "content": compile_prompt}]
+              )
+              return response.content[0].text
+
+          # ── Run research iterations ──────────────────────────────────────
+          print(f"🔬 Researching: {TOPIC}")
+          print(f"   Depth: {DEPTH} iterations")
+
+          all_iterations = []
+          current_summary = ""
+
+          for i in range(DEPTH):
+              print(f"   Iteration {i+1}/{DEPTH}...")
+              iteration_text = research_iteration(TOPIC, current_summary, i+1, DEPTH)
+              all_iterations.append(iteration_text)
+              current_summary = iteration_text  # Use latest as context for next
+
+          # Compile final report
+          print("   Compiling final report...")
+          final_report = compile_report(TOPIC, all_iterations, FORMAT)
+
+          # Build full document
+          output_path = f"research/findings/{SAFE_TOPIC}-{TODAY}.md"
+          document = f"""# Research: {TOPIC}
+
+**Completed:** {TODAY}
+**Depth:** {DEPTH} iterations
+**Format:** {FORMAT}
+
+---
+
+{final_report}
+
+---
+
+## Research Iterations (Raw)
+
+<details>
+<summary>Click to expand raw research iterations</summary>
+
+""" + "\n\n---\n\n".join(
+              [f"### Iteration {i+1}\n\n{text}" for i, text in enumerate(all_iterations)]
+          ) + "\n\n</details>\n"
+
+          Path("research/findings").mkdir(exist_ok=True)
+          Path(output_path).write_text(document)
+          print(f"✅ Report written: {output_path}")
+
+          # Also save the topic file
+          topic_path = f"research/topics/{SAFE_TOPIC}.md"
+          Path("research/topics").mkdir(exist_ok=True)
+          if not Path(topic_path).exists():
+              Path(topic_path).write_text(f"# {TOPIC}\n\n**Status:** researched\n**Latest findings:** [{output_path}](../{output_path})\n")
+
+          # Update changelog
+          with open("catalog/CHANGELOG.md", "a") as f:
+              f.write(f"\n## {TODAY} — Researcher Run\n- 🔬 Researched: \"{TOPIC}\" ({DEPTH} iterations)\n- Report: `{output_path}`\n")
+
+          RESEARCH_SCRIPT
+
+      # ── Commit research findings ───────────────────────────────────────────
+      - name: Commit findings
+        id: commit
+        run: |
+          git config user.name "Researcher Agent"
+          git config user.email "researcher@versailles.bot"
+          git add research/ catalog/CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "No research to commit."
+          else
+            git commit -m "research: completed '${{ steps.params.outputs.topic }}' [$(date -u '+%Y-%m-%d')]"
+            git push
+            echo "committed=true" >> $GITHUB_OUTPUT
+          fi
+
+      # ── Create PR with findings ────────────────────────────────────────────
+      - name: Create PR with research findings
+        if: steps.commit.outputs.committed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOPIC: ${{ steps.params.outputs.topic }}
+          SAFE_TOPIC: ${{ steps.params.outputs.safe_topic }}
+        run: |
+          gh pr create \
+            --title "📚 Research: $TOPIC" \
+            --body "Automated research report on: **$TOPIC**
+
+Findings saved to: \`research/findings/$SAFE_TOPIC-$(date -u '+%Y-%m-%d').md\`
+
+Triggered by: #${{ github.event.issue.number || 'manual' }}
+
+Review the findings and merge when satisfied." \
+            --label "research-findings" \
+            --head "${{ github.ref_name }}" || echo "PR creation skipped (may already exist or no findings)"
+
+      # ── Comment on triggering issue ────────────────────────────────────────
+      - name: Comment on issue
+        if: github.event.issue.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --body "✅ Research complete! 
+
+**Topic:** ${{ steps.params.outputs.topic }}
+**Depth:** ${{ steps.params.outputs.depth }} iterations
+**Findings:** \`research/findings/${{ steps.params.outputs.safe_topic }}-$(date -u '+%Y-%m-%d').md\`
+
+A PR has been opened with the full report. Check the **Actions** tab for details." || echo "Could not comment on issue"

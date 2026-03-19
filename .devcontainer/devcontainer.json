@@ -1,0 +1,53 @@
+{
+  "name": "Versailles Agentic Environment",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "GitHub.vscode-github-actions",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "esbenp.prettier-vscode",
+        "yzhang.markdown-all-in-one",
+        "bierner.markdown-mermaid",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "github.copilot.enable": {
+          "*": true
+        },
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "postCreateCommand": "bash harness/agent-bootstrap.sh && npm install -g pnpm @claude-flow/cli@latest",
+  "postStartCommand": "echo '🏰 Welcome to Versailles — your agentic environment is ready.'",
+  "remoteEnv": {
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "VERSAILLES_ENV": "codespaces"
+  },
+  "forwardPorts": [3000, 8080],
+  "portsAttributes": {
+    "3000": {
+      "label": "Agent Dashboard",
+      "onAutoForward": "notify"
+    }
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspaces/Versailles,type=bind,consistency=cached"
+  ]
+}

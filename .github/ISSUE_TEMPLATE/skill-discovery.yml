@@ -1,0 +1,120 @@
+name: "🔭 Skill / Tool Discovery"
+description: "Report a powerful tool, MCP server, Claude skill, or AI plugin you've found."
+title: "[DISCOVERY] "
+labels: ["skill-discovery", "needs-bouncer-review"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## New Tool Discovery
+        Fill this out to add a tool to the Versailles pipeline. The Bouncer agent will automatically vet it after submission.
+
+  - type: input
+    id: tool-name
+    attributes:
+      label: "Tool / Skill Name"
+      description: "What is the name of the tool or skill?"
+      placeholder: "e.g. claude-flow, SkillFish, context7"
+    validations:
+      required: true
+
+  - type: input
+    id: tool-url
+    attributes:
+      label: "GitHub / URL"
+      description: "Link to the repository or homepage."
+      placeholder: "https://github.com/owner/repo"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: "Category"
+      description: "What type of tool is this?"
+      options:
+        - "MCP Server"
+        - "Claude Skill / Prompt"
+        - "AI Agent / Workflow"
+        - "Plugin / Extension"
+        - "Library / Framework"
+        - "Research / Paper"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: "What does it do?"
+      description: "Describe what this tool does in 2-3 sentences."
+      placeholder: "This tool does X by doing Y, which makes Z faster/better/possible."
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-powerful
+    attributes:
+      label: "Why is this powerful?"
+      description: "What makes this worth adding to Versailles? What problem does it solve?"
+      placeholder: "This is powerful because..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: estimated-score
+    attributes:
+      label: "Estimated Power Score (1-10)"
+      description: "Your gut-check on how powerful this is. 1 = meh, 10 = game-changing."
+      options:
+        - "10 - Game-changing"
+        - "9 - Exceptional"
+        - "8 - Very powerful"
+        - "7 - Strong"
+        - "6 - Good"
+        - "5 - Decent"
+        - "4 - Average"
+        - "3 - Weak"
+        - "2 - Poor"
+        - "1 - Skip it"
+    validations:
+      required: true
+
+  - type: input
+    id: repo-stars
+    attributes:
+      label: "GitHub Stars (if applicable)"
+      description: "Paste the current star count."
+      placeholder: "e.g. 1,234"
+
+  - type: input
+    id: repo-age
+    attributes:
+      label: "Repository Age"
+      description: "When was this repo created? Prefer tools > 6 months old."
+      placeholder: "e.g. March 2024 (2 years old)"
+
+  - type: checkboxes
+    id: security-pre-check
+    attributes:
+      label: "Quick Security Pre-Check"
+      description: "Check anything you've already verified."
+      options:
+        - label: "I reviewed the source code and didn't see obvious malicious patterns"
+        - label: "The repo has a reasonable number of stars (>50) and real contributors"
+        - label: "The tool does NOT require network access to unknown third parties"
+        - label: "The tool does NOT ask for credentials or API keys beyond what's expected"
+
+  - type: textarea
+    id: security-concerns
+    attributes:
+      label: "Any Security Concerns?"
+      description: "Note anything suspicious, even if minor. Better safe than sorry."
+      placeholder: "None that I noticed / I saw X which might be worth checking..."
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: "Additional Context"
+      description: "Anything else the agents should know?"

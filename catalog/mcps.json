@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-03-19",
+  "total": 0,
+  "description": "Discovered MCP (Model Context Protocol) server catalog. Auto-updated by the Scout workflow.",
+  "schema": {
+    "name": "string — server name",
+    "full_name": "string — owner/repo",
+    "url": "string — GitHub URL",
+    "description": "string — what capabilities this MCP provides",
+    "transport": "string — stdio | sse | http",
+    "tools_provided": "array of strings — tool names exposed by this MCP",
+    "stars": "number",
+    "score": "number 0-100",
+    "discovered_at": "string — YYYY-MM-DD",
+    "install_command": "string — how to install/run this MCP",
+    "config_example": "object — example .mcp.json entry"
+  },
+  "mcps": []
+}
