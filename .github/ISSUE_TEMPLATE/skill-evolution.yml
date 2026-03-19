@@ -1,0 +1,111 @@
+name: "🧬 Skill Evolution Request"
+description: "Request that an existing skill be improved through the TDD evolution loop."
+title: "[EVOLVE] "
+labels: ["skill-evolution", "needs-evolver"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Skill Evolution Request
+        Use this to request that an existing skill in `skills/evolved/` or `skills/evaluated/` be improved. The Evolver agent will run TDD mutation cycles to improve it.
+
+  - type: input
+    id: skill-name
+    attributes:
+      label: "Skill Name"
+      description: "Name of the skill to evolve. Should match the filename in skills/."
+      placeholder: "e.g. code-review-assistant-v2"
+    validations:
+      required: true
+
+  - type: input
+    id: skill-path
+    attributes:
+      label: "Current Skill File Path"
+      description: "Full path to the skill file in the repository."
+      placeholder: "skills/evolved/code-review-assistant-v2-evolved.md"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: current-score
+    attributes:
+      label: "Current Performance (if known)"
+      description: "How well is this skill performing right now?"
+      options:
+        - "Unknown — needs baseline eval first"
+        - "Excellent (80-100) — minor improvements wanted"
+        - "Good (60-79) — moderate improvements wanted"
+        - "Average (40-59) — significant improvements needed"
+        - "Poor (<40) — major overhaul needed"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "What's Wrong / What Could Be Better?"
+      description: "Describe the specific problem or limitation with the current skill."
+      placeholder: |
+        The skill currently does X, but it fails when Y. 
+        Or: The skill works fine but I think it could be 20% faster if...
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired-behavior
+    attributes:
+      label: "Desired Behavior After Evolution"
+      description: "What should the evolved skill do that the current one doesn't?"
+      placeholder: "After evolution, the skill should be able to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: test-scenarios
+    attributes:
+      label: "Test Scenarios"
+      description: |
+        Describe 2-3 test cases the Evolver should use to judge improvement.
+        Format: Input → Expected output
+      placeholder: |
+        Scenario 1: Given [input], the skill should produce [output]
+        Scenario 2: Given [input], the skill should NOT do [bad thing]
+        Scenario 3: Given [edge case], the skill should handle it by [behavior]
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: "Priority"
+      description: "How urgently do you need this evolution?"
+      options:
+        - "🔴 High — blocking other work"
+        - "🟡 Medium — would improve workflow significantly"
+        - "🟢 Low — nice to have"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mutation-strategy
+    attributes:
+      label: "Preferred Mutation Strategy"
+      description: "How should the Evolver approach improving this skill? (See agents/evolver/EVOLUTION_RULES.md for details)"
+      options:
+        - "Auto — let the Evolver decide"
+        - "Refinement — small targeted improvements"
+        - "Expansion — add new capabilities"
+        - "Compression — make it more concise/efficient"
+        - "Specialization — focus on one use case"
+        - "Generalization — make it work across more cases"
+        - "Restructure — rethink the whole approach"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: "Additional Context"
+      description: "Examples of good outputs, related skills, or anything else that would help."
