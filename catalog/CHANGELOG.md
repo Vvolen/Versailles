@@ -29,4 +29,19 @@
 
 ---
 
+## 2026-03-26 — Skills vs Projects Restructuring (Agent Session)
+
+- 🏗️ Created `projects/` directory tree (`discovered/`, `vetted/`, `archive/`)
+- 📦 Moved 3 tool discoveries from `skills/discovered/` → `projects/discovered/`
+  - These are open source projects, NOT agent skills (SKILL.md)
+- 📋 Created `SKILL_SPEC.md` — defines what agent skills ARE (Anthropic SKILL.md spec)
+- 🎯 Created `SEARCH_DIRECTIVES.md` — formal search primitives and owner preferences
+- ✏️ Updated `CLAUDE.md` sections 6 + 8 to reflect two-track pipeline
+- ✏️ Updated `README.md` architecture and directory structure
+- ✏️ Updated `self-heal.yml` and `agent-bootstrap.sh` for new dirs
+- 🔬 Researched RuFlo (ruvnet/ruflo) — confirmed as claude-flow V3
+- 🔬 Researched Anthropic Agent Skills spec (agentskills.io/specification)
+
+---
+
 <!-- Agent entries will be appended below this line -->
