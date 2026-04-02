@@ -100,6 +100,11 @@ jobs:
           EXPLORATION_DEPTH = os.environ.get("EXPLORATION_DEPTH", "standard")
           TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
           MAX_PER_QUERY = 15 if EXPLORATION_DEPTH == "standard" else 30
+          # Security gate threshold (EXPLORATION_METHODOLOGY.md §Phase 3):
+          # If Security Posture < this value, cap total gem score at 40,
+          # preventing promotion of tools with serious security concerns.
+          SECURITY_GATE_THRESHOLD = 5
+          SECURITY_GATE_CAP = 40
 
           headers = {
               "Authorization": f"token {GITHUB_TOKEN}",
@@ -514,9 +519,10 @@ jobs:
 
               total = sum(scores.values())
 
-              # Security gate: if security < 5, cap total at 40
-              if scores["security"] < 5:
-                  total = min(total, 40)
+              # Security gate (EXPLORATION_METHODOLOGY.md): a tool with critical
+              # security concerns cannot be a gem regardless of other dimensions.
+              if scores["security"] < SECURITY_GATE_THRESHOLD:
+                  total = min(total, SECURITY_GATE_CAP)
 
               return total, scores, notes
 
