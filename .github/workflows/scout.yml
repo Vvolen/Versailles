@@ -7,7 +7,7 @@
 #   1. Searches GitHub for trending repositories in key categories
 #   2. Checks Anthropic and ModelContextProtocol orgs for new releases
 #   3. Scores each discovery against our CRITERIA.md rubric
-#   4. Saves results to skills/discovered/ and catalog/
+#   4. Routes skills to skills/discovered/ and projects to projects/discovered/
 #   5. Commits the findings and triggers the Bouncer workflow
 #
 # For non-developers: This is like a web spider that wakes up every 6 hours,
@@ -97,6 +97,10 @@ jobs:
               ("claude agent workflow automation in:name,description stars:>50", "AI Agent"),
               ("anthropic claude plugin extension in:name,description stars:>20", "Plugin"),
               ("mcp server tools claude in:readme stars:>30", "MCP Server"),
+              # Skill-specific searches (from SEARCH_DIRECTIVES.md)
+              ('"SKILL.md" in:path', "Claude Skill"),
+              ('"agent skill" in:name,description stars:>10', "Claude Skill"),
+              ("topic:agent-skills", "Claude Skill"),
           ]
 
           # Also check these orgs directly for new releases
@@ -215,6 +219,27 @@ jobs:
                   "is_fork": repo.get("fork", False),
               }
 
+          def is_skill(discovery):
+              """
+              Determine if a discovery is an agent skill (→ skills/) or a
+              project (→ projects/).  A discovery is a skill if:
+                - Its category is "Claude Skill", OR
+                - The source repo contains a SKILL.md file (checked via API)
+              """
+              if discovery["category"] == "Claude Skill":
+                  return True
+              # Check the repo for a SKILL.md file
+              owner = discovery["owner"]
+              repo_name = discovery["name"]
+              api_url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/SKILL.md"
+              try:
+                  resp = requests.get(api_url, headers=headers)
+                  if resp.status_code == 200:
+                      return True
+              except Exception:
+                  pass
+              return False
+
           # ── Run all searches ─────────────────────────────────────────────
           print("🔭 Scout starting...")
           all_discoveries = []
@@ -270,15 +295,20 @@ jobs:
 
           # ── Write new discovery files ────────────────────────────────────
           os.makedirs("skills/discovered", exist_ok=True)
+          os.makedirs("projects/discovered", exist_ok=True)
           new_count = 0
 
           for discovery in quality_discoveries:
               if discovery["url"] in existing_urls:
                   continue  # Already in catalog
 
+              # Route: skills vs projects (CLAUDE.md §6 — two tracks)
+              skill = is_skill(discovery)
+              target_dir = "skills/discovered" if skill else "projects/discovered"
+
               # Write individual discovery file
               safe_name = discovery["name"].lower().replace(" ", "-").replace("/", "-")
-              filepath = f"skills/discovered/{safe_name}-{TODAY}.md"
+              filepath = f"{target_dir}/{safe_name}-{TODAY}.md"
 
               # Don't overwrite if already discovered today
               if os.path.exists(filepath):
@@ -343,12 +373,12 @@ jobs:
         run: |
           git config user.name "Scout Agent"
           git config user.email "scout@versailles.bot"
-          git add skills/discovered/ catalog/
+          git add skills/discovered/ projects/discovered/ catalog/
           # Only commit if there are actual changes
           if git diff --staged --quiet; then
             echo "No new discoveries this run."
           else
-            DISCOVERY_COUNT=$(git diff --staged --name-only | grep "skills/discovered" | wc -l)
+            DISCOVERY_COUNT=$(git diff --staged --name-only | grep -E "(skills|projects)/discovered" | wc -l)
             git commit -m "scout: discovered ${DISCOVERY_COUNT} new tool(s) [$(date -u '+%Y-%m-%d %H:%M UTC')]"
             git push
             echo "Discoveries committed and pushed."
