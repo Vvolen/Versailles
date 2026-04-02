@@ -45,3 +45,26 @@
 ---
 
 <!-- Agent entries will be appended below this line -->
+
+## 2026-04-02 — Explorer Agent & Pipeline Seeding (Agent Session)
+
+- 🧭 Created **Explorer Agent** — the strategic gem hunter (5th agent)
+  - `agents/explorer/SOUL.md` — Identity, mission, values, output format
+  - `agents/explorer/EXPLORATION_METHODOLOGY.md` — 5-phase cycle, 6-dimension scoring, self-building loop
+- 🔧 Created **Explorer Workflow** (`.github/workflows/explorer.yml`)
+  - Weekly cron (Mondays 3 AM UTC) + manual trigger
+  - Full 5-phase methodology: intelligence gathering → deep research → gem scoring → strategic decision → report
+  - Routes skills vs projects correctly
+- 🔧 Fixed **Scout routing bug** in `.github/workflows/scout.yml`
+  - Scout now routes projects to `projects/discovered/` instead of `skills/discovered/`
+  - Added `is_skill()` function checking for SKILL.md files and Claude Skill category
+  - Added 3 SKILL.md-specific search queries from SEARCH_DIRECTIVES.md
+- 📝 Created **4 production-quality agent skills** (first real content in pipeline!):
+  - `deep-code-security-review-2026-04-02.md` — OWASP Top 10 code review skill
+  - `recursive-research-synthesis-2026-04-02.md` — Multi-layer research with synthesis
+  - `skill-architect-meta-skill-2026-04-02.md` — Meta-skill for creating agent skills
+  - `agent-orchestration-patterns-2026-04-02.md` — 5 multi-agent orchestration patterns
+- ✏️ Updated `self-heal.yml` to validate Explorer agent directory and SOUL.md
+- ✏️ Updated `README.md` — architecture diagram, agent table, directory structure, badges
+- ✏️ Updated `AGENT_NOTES.md` — Entry 3 with session insights
+
