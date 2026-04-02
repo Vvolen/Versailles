@@ -200,7 +200,7 @@ Each dimension is scored independently. The scores are summed for the total gem 
 1. **Score each dimension independently.** Do not let a high score in one dimension inflate another.
 2. **Use the full range.** A score of 17 should be rare. A score of 0 should be reserved for clear failures.
 3. **Document the reasoning** for every score in the report. A number without context is useless.
-4. **Security is a gate, not just a dimension.** If Security Posture < 5, the total score is capped at 40 regardless of other dimensions.
+4. **Security is a gate, not just a dimension.** If Security Posture < 5, the total score is capped at 40 regardless of other dimensions. This threshold exists because Versailles operates on zero-trust principles — a tool with serious security concerns cannot be a gem, no matter how transformative. The cap of 40 ensures it falls into the "Not a Gem" or "Marginal" classification, preventing accidental promotion.
 
 ### Gem Score Interpretation
 
@@ -256,13 +256,15 @@ Each dimension is scored independently. The scores are summed for the total gem 
 ### Decision Rule
 
 ```
-gem_score ≥ 85 AND risk = low       → Option A or B (fast-track)
-gem_score 70–84                     → Option A, B, or D (standard path)
-gem_score 55–69 AND unique          → Option A or C (extract value)
-gem_score < 55                      → Skip or monitor (don't force it)
-architectural_insight = true        → Option C (regardless of score)
-multiple_related_findings = true    → Option D (synthesis)
+gem_score ≥ 85 AND risk_assessment = low  → Option A or B (fast-track)
+gem_score 70–84                           → Option A, B, or D (standard path)
+gem_score 55–69 AND unique                → Option A or C (extract value)
+gem_score < 55                            → Skip or monitor (don't force it)
+architectural_insight = true              → Option C (regardless of score)
+multiple_related_findings = true          → Option D (synthesis)
 ```
+
+Here, `risk_assessment` refers to the Risk Assessment field from the exploration report (`low | medium | high | critical`), derived from the Security Posture score and other risk factors identified during Phase 2.
 
 **Critical rule:** It is always acceptable to decide "nothing here warrants action." The Explorer does not manufacture gems to justify its existence.
 
