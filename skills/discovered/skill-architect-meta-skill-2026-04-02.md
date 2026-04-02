@@ -637,8 +637,10 @@ error responses, with a checklist and examples.
    and mentally simulate how an agent would apply the skill. If the skill doesn't
    help on the hard case, it won't hit 15% improvement.
 
-4. **Keep skills under 500 lines.** Context window space is precious. If your
-   skill exceeds 500 lines, you are probably combining multiple skills. Split it.
+4. **Keep skills under 500 lines — except meta-skills.** Context window space is
+   precious. If your skill exceeds 500 lines, you are probably combining multiple
+   skills. Split it. Meta-skills and comprehensive reference skills may exceed
+   this limit when the breadth of coverage justifies the extra context.
 
 5. **Write triggers from the user's perspective.** The "Use when..." clause should
    match how a human would describe the task, not how an agent categorizes it.

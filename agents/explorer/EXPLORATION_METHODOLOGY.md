@@ -200,7 +200,7 @@ Each dimension is scored independently. The scores are summed for the total gem 
 1. **Score each dimension independently.** Do not let a high score in one dimension inflate another.
 2. **Use the full range.** A score of 17 should be rare. A score of 0 should be reserved for clear failures.
 3. **Document the reasoning** for every score in the report. A number without context is useless.
-4. **Security is a gate, not just a dimension.** If Security Posture < 5, the total score is capped at 40 regardless of other dimensions. This threshold exists because Versailles operates on zero-trust principles — a tool with serious security concerns cannot be a gem, no matter how transformative. The cap of 40 ensures it falls into the "Not a Gem" or "Marginal" classification, preventing accidental promotion.
+4. **Security is a gate, not just a dimension.** If Security Posture < 5, the total score is capped at 40 regardless of other dimensions. This threshold exists because Versailles operates on zero-trust principles — a tool with serious security concerns cannot be a gem, no matter how transformative. The cap of 40 ensures it falls into the "Not a Gem" or "Marginal" classification, preventing accidental promotion. *(These values are implemented as `SECURITY_GATE_THRESHOLD` and `SECURITY_GATE_CAP` constants in `.github/workflows/explorer.yml` — keep them in sync.)*
 
 ### Gem Score Interpretation
 

@@ -225,20 +225,27 @@ jobs:
               project (→ projects/).  A discovery is a skill if:
                 - Its category is "Claude Skill", OR
                 - The source repo contains a SKILL.md file (checked via API)
+              Note: caches results to avoid redundant API calls and rate limit
+              consumption when processing many discoveries.
               """
               if discovery["category"] == "Claude Skill":
                   return True
-              # Check the repo for a SKILL.md file
+              # Check the repo for a SKILL.md file (with caching)
+              cache_key = discovery["full_name"]
+              if cache_key in _skill_check_cache:
+                  return _skill_check_cache[cache_key]
               owner = discovery["owner"]
               repo_name = discovery["name"]
               api_url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/SKILL.md"
               try:
                   resp = requests.get(api_url, headers=headers)
-                  if resp.status_code == 200:
-                      return True
+                  result = resp.status_code == 200
               except Exception:
-                  pass
-              return False
+                  result = False
+              _skill_check_cache[cache_key] = result
+              return result
+
+          _skill_check_cache = {}  # Cache for SKILL.md existence checks
 
           # ── Run all searches ─────────────────────────────────────────────
           print("🔭 Scout starting...")
