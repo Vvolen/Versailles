@@ -159,12 +159,17 @@ When building tool calls or prompts:
 
 ---
 
-## 6. Skill Discovery Pipeline
+## 6. Two Discovery Tracks
 
-The lifecycle of every skill in Versailles:
+Versailles discovers two fundamentally different things. **Never mix them.**
+
+### Track 1: Agent Skills (→ `skills/`)
+
+Skills are **SKILL.md instruction files** (following the [Agent Skills spec](https://agentskills.io/specification))
+that teach agents how to do specific tasks better. They go through the full self-evolution pipeline.
 
 ```
-GitHub/Web Discovery
+GitHub/Web Discovery or Agent-Authored Draft
         ↓
   skills/discovered/        ← Scout deposits here
         ↓
@@ -172,16 +177,36 @@ GitHub/Web Discovery
         ↓
   skills/quarantine/        ← Pending security review
         OR
-  skills/evaluated/         ← Passed security, ready for testing
+  skills/evaluated/         ← Passed security, ready for A/B testing
         ↓
-  [Evaluator runs]
+  [Evaluator runs blind test vs Claude baseline]
         ↓
-  skills/evolved/           ← Production-ready
+  skills/evolved/           ← Beat baseline by ≥15% → production
         OR
   skills/archive/           ← Failed eval, deprecated
 ```
 
 **Never skip stages.** A skill in `discovered/` MUST pass through `bouncer` before it reaches `evaluated/`.
+See `SKILL_SPEC.md` for the full SKILL.md format and `SEARCH_DIRECTIVES.md` for what skills to look for.
+
+### Track 2: Open Source Projects (→ `projects/`)
+
+Projects are **external GitHub repos, tools, and libraries** — not agent instructions.
+They are cataloged and vetted but do NOT go through A/B testing or self-evolution.
+
+```
+GitHub/Web Discovery
+        ↓
+  projects/discovered/      ← Scout deposits here
+        ↓
+  [Bouncer vets]
+        ↓
+  projects/vetted/          ← Approved, cataloged in catalog/tools.json
+        OR
+  projects/archive/         ← Rejected or deprecated
+```
+
+See `SEARCH_DIRECTIVES.md` for what projects to look for and owner preferences.
 
 ---
 
@@ -201,19 +226,32 @@ These are non-negotiable:
 ## 8. File Organization Rules
 
 ```
-skills/discovered/<tool-name>-<YYYY-MM-DD>.md     # Scout creates these
-skills/quarantine/<tool-name>-quarantine.md        # Bouncer stages here
-skills/evaluated/<tool-name>-v<N>.md               # Ready for evolution
-skills/evolved/<tool-name>-v<N>-evolved.md         # Production skills
-skills/archive/<tool-name>-deprecated-<date>.md    # Never delete, archive
+# ── Agent Skills (SKILL.md format, self-evolving) ──────────────────
+skills/discovered/<skill-name>-<YYYY-MM-DD>.md     # Scout creates these
+skills/quarantine/<skill-name>-quarantine.md        # Bouncer stages here
+skills/evaluated/<skill-name>-v<N>.md               # Ready for evolution
+skills/evolved/<skill-name>-v<N>-evolved.md         # Production skills
+skills/archive/<skill-name>-deprecated-<date>.md    # Never delete, archive
 
-catalog/tools.json         # Auto-updated by Scout
+# ── Open Source Projects (external repos, no evolution) ────────────
+projects/discovered/<project-name>-<YYYY-MM-DD>.md  # Scout discovers these
+projects/vetted/<project-name>.md                   # Bouncer-approved, cataloged
+projects/archive/<project-name>-deprecated-<date>.md # Rejected or deprecated
+
+# ── Catalogs ──────────────────────────────────────────────────────
+catalog/tools.json         # Auto-updated by Scout (project catalog)
 catalog/mcps.json          # Auto-updated by Scout
 catalog/plugins.json       # Auto-updated by Scout
 catalog/CHANGELOG.md       # Every agent action logged here
 
+# ── Research ──────────────────────────────────────────────────────
 research/topics/<topic>.md         # Research requests
 research/findings/<topic>-<date>.md # Research outputs
+
+# ── Directives ────────────────────────────────────────────────────
+SKILL_SPEC.md              # What agent skills ARE (Anthropic spec)
+SEARCH_DIRECTIVES.md       # What to search for and owner preferences
+AGENT_NOTES.md             # Cross-agent memory journal (append-only)
 ```
 
 ---

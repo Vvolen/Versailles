@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "last_updated": "2026-03-19",
-  "total": 0,
+  "last_updated": "2026-03-26",
+  "total": 3,
   "description": "Rated tool catalog. Auto-updated by the Scout workflow every 6 hours.",
   "schema": {
     "name": "string — repository name",
@@ -19,5 +19,54 @@
     "discovered_at": "string — YYYY-MM-DD",
     "owner": "string — GitHub username"
   },
-  "tools": []
+  "tools": [
+    {
+      "name": "gh-aw",
+      "full_name": "github/gh-aw",
+      "url": "https://github.com/github/gh-aw",
+      "description": "Write agentic workflows in natural language markdown, and run them in GitHub Actions.",
+      "category": "AI Agent",
+      "stars": 4169,
+      "forks": 316,
+      "language": "Go",
+      "topics": ["actions", "cai", "ci", "claude-code", "codex", "copilot", "gh-extension", "github-actions"],
+      "last_updated": "2026-03-26",
+      "score": 92,
+      "score_reasons": ["★4169 (exceptional)", "Updated this week", "Has description", "Topics: actions,cai,ci,...", "316 forks (popular)", "165 open issues (healthy)", "Trusted org: github"],
+      "discovered_at": "2026-03-26",
+      "owner": "github"
+    },
+    {
+      "name": "servers",
+      "full_name": "modelcontextprotocol/servers",
+      "url": "https://github.com/modelcontextprotocol/servers",
+      "description": "Reference implementations and community-contributed servers for the Model Context Protocol (MCP).",
+      "category": "MCP Server",
+      "stars": 16000,
+      "forks": 3000,
+      "language": "TypeScript",
+      "topics": ["mcp", "model-context-protocol", "servers"],
+      "last_updated": "2026-03-26",
+      "score": 88,
+      "score_reasons": ["★16000+ (exceptional)", "Updated this week", "Has description", "Topics: mcp,model-context-protocol,...", "3000+ forks (exceptional)", "Trusted org: modelcontextprotocol"],
+      "discovered_at": "2026-03-26",
+      "owner": "modelcontextprotocol"
+    },
+    {
+      "name": "anthropic-cookbook",
+      "full_name": "anthropics/anthropic-cookbook",
+      "url": "https://github.com/anthropics/anthropic-cookbook",
+      "description": "A collection of notebooks and recipes demonstrating effective ways to use Claude.",
+      "category": "Claude Skill",
+      "stars": 8000,
+      "forks": 1000,
+      "language": "Jupyter Notebook",
+      "topics": ["anthropic", "claude", "cookbook", "examples", "tutorials"],
+      "last_updated": "2026-03-26",
+      "score": 85,
+      "score_reasons": ["★8000+ (exceptional)", "Updated this week", "Has description", "Topics: anthropic,claude,cookbook,...", "1000+ forks (popular)", "Trusted org: anthropics"],
+      "discovered_at": "2026-03-26",
+      "owner": "anthropics"
+    }
+  ]
 }

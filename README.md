@@ -32,10 +32,15 @@ Versailles is an **autonomous orchestration layer** that continuously discovers,
 │       │               │               │                │           │
 │       ▼               ▼               ▼                ▼           │
 │  discovered/     quarantine/     evaluated/        evolved/        │
+│  (skills)        (skills)        (skills)          (skills)        │
 │                                                                     │
 │  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                    SKILL PIPELINE                           │   │
+│  │                    SKILL PIPELINE (Agent Skills)            │   │
 │  │  discovered → quarantine → evaluated → evolved → archive   │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                 PROJECT PIPELINE (Open Source Tools)        │   │
+│  │  discovered → vetted → cataloged (no self-evolution)       │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 │                                                                     │
 │  ┌───────────────────┐    ┌──────────────────────────────────────┐ │
@@ -95,6 +100,9 @@ Go to **Actions** tab → click any running workflow → watch the live logs.
 
 ```
 Versailles/
+├── SKILL_SPEC.md                # What agent skills ARE (Anthropic SKILL.md spec)
+├── SEARCH_DIRECTIVES.md         # What to search for and owner preferences
+├── AGENT_NOTES.md               # Cross-agent memory journal (append-only)
 ├── CLAUDE.md                    # Agent harness constitution — agents read this first
 ├── .mcp.json                    # MCP server configuration
 ├── .devcontainer/               # Codespaces configuration
@@ -107,14 +115,18 @@ Versailles/
 │   ├── bouncer/                 # SOUL.md + SECURITY_CHECKS.md
 │   ├── evaluator/               # SOUL.md + EVAL_FRAMEWORK.md
 │   └── evolver/                 # SOUL.md + EVOLUTION_RULES.md
-├── skills/
-│   ├── discovered/              # Raw scout output (pre-security)
+├── skills/                      # AGENT SKILLS (SKILL.md format, self-evolving)
+│   ├── discovered/              # Raw skill drafts (pre-security)
 │   ├── quarantine/              # Under security review
-│   ├── evaluated/               # Passed security, being tested
+│   ├── evaluated/               # Passed security, being A/B tested
 │   ├── evolved/                 # Production-ready, TDD-improved
 │   └── archive/                 # Deprecated skills
+├── projects/                    # OPEN SOURCE PROJECTS (external tools, no evolution)
+│   ├── discovered/              # Raw project discoveries
+│   ├── vetted/                  # Bouncer-approved, cataloged
+│   └── archive/                 # Rejected or deprecated
 ├── catalog/
-│   ├── tools.json               # Rated tool catalog (auto-updated)
+│   ├── tools.json               # Rated project catalog (auto-updated)
 │   ├── mcps.json                # MCP server catalog
 │   ├── plugins.json             # Plugin catalog
 │   └── CHANGELOG.md             # Every agent action logged here
