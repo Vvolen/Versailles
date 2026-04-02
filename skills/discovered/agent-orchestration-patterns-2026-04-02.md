@@ -675,9 +675,9 @@ When agents must share state, follow these rules:
    MAX_BLACKBOARD_SIZE = 8000 tokens
 
    IF blackboard.size > MAX_BLACKBOARD_SIZE * 0.8:
-     1. Summarize entries older than 3 rounds
-     2. Remove entries marked as "superseded"
-     3. Keep only the top 5 entries by impact score
+     1. Summarize entries older than 3 rounds into a single digest
+     2. Remove entries marked as "superseded" (their replacements remain)
+     3. Keep the 5 most recently referenced entries in full detail
    ```
 
 ## Examples
