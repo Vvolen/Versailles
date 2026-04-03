@@ -803,3 +803,23 @@ COST: 1 retry, 3 workers instead of 2, 15% over budget — acceptable.
 10. **Prefer idempotent agents.** If you can safely re-run an agent with the same
     input and get the same output, error recovery is trivial. Design agent tasks
     to be side-effect-free when possible.
+
+
+---
+
+## Security Report — agent-orchestration-patterns-2026-04-02.md
+**Date:** 2026-04-03
+**Result:** ❌ FAILED / QUARANTINED
+**Security Score:** 20/100
+
+### Reputation Check
+- Score: 50/100
+- Note: No URL found in skill file
+
+### Static Analysis Findings
+- 🚨 CRITICAL: References sensitive credential names
+
+### Verdict
+- Critical issues: 1
+- Warnings: 0
+- Moved to quarantine for human review
