@@ -195,3 +195,31 @@ Python problem while making workflows more readable for the non-developer owner.
 **Confidence in suggestions:** high
 
 ---
+
+## Entry 4 — 2026-04-03 — Harness Setup: Environment Standardization + Ruflo Integration
+**Agent:** Copilot Coding Agent
+**Task:** Enable reproducible agentic harness environment; document state vs. two weeks ago; introduce Ruflo orchestration; add agentic planning workflow.
+
+**What was done:**
+1. Created `.claude/` directory (`settings.json`, `context.md`) — Claude Code and other agent runtimes now have project-level configuration (MCP servers, tier routing, disallowed actions).
+2. Updated `.devcontainer/devcontainer.json` — `postCreateCommand` now prints a Ruflo version check after install; `postStartCommand` shows the 2-worker + orchestrator command.
+3. Updated `harness/agent-bootstrap.sh` — Step 5 now detects `ruflo` binary first, then `claude-flow` as fallback; prints the exact swarm command when found.
+4. Created `docs/STATE_AND_DELTAS.md` — comprehensive state/delta document covering: current pipeline counts, 2-week change log, gap analysis, how to connect Versailles ↔ Foundation-layer ↔ MUNCH, and the Ruflo 2+1 swarm pattern.
+5. Created `.github/workflows/agentic-planner.yml` — `workflow_dispatch` that accepts a plain-language prompt, generates `spec.md` + `task_plan.md` + `test_plan.md` via Claude, uploads as artifacts, optionally commits to `plan/` branch or opens an issue. No auto-merge.
+
+**Key insights:**
+- `claude-flow` and `ruflo` are the same binary; check for `ruflo` first as it's the current name.
+- The devcontainer already installs it via `@claude-flow/cli@latest` — no package change needed.
+- Agentic planner uses `claude-opus-4-5` for detailed mode and `claude-haiku-4-5` for quick mode — follows 3-tier routing from CLAUDE.md.
+- Cross-repo integration pattern: use `repository_dispatch` events (not shared environments) to connect Versailles → Foundation-layer.
+
+**State left for next agent:**
+- 1 skill in `skills/evaluated/` (`recursive-research-synthesis-*`) is ready for A/B testing — trigger `eval.yml` manually.
+- 3 skills in `skills/quarantine/` need human security sign-off before they can proceed.
+- `catalog/mcps.json` and `catalog/plugins.json` are empty — Scout needs a focused run.
+
+**Suggestion for next agent:**
+Try the `agentic-planner.yml` workflow end-to-end with a simple test prompt. If it fails, check whether `ANTHROPIC_API_KEY` is set in repo secrets. Also consider triggering `eval.yml` on `recursive-research-synthesis-*` to get the first skill into `skills/evolved/`.
+
+**Tags:** #harness #ruflo #devcontainer #state-docs #agentic-planner #codespaces
+**Confidence in suggestions:** high

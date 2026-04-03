@@ -33,8 +33,8 @@
       }
     }
   },
-  "postCreateCommand": "bash harness/agent-bootstrap.sh && npm install -g pnpm @claude-flow/cli@latest",
-  "postStartCommand": "echo '🏰 Welcome to Versailles — your agentic environment is ready.'",
+  "postCreateCommand": "bash harness/agent-bootstrap.sh && npm install -g pnpm @claude-flow/cli@latest && echo '✅ Ruflo/claude-flow installed:' && (ruflo --version 2>/dev/null || claude-flow --version 2>/dev/null || echo 'available via npx')",
+  "postStartCommand": "echo '🏰 Welcome to Versailles — your agentic environment is ready.' && echo '  Run: bash harness/agent-bootstrap.sh  to verify setup' && echo '  Run: ruflo swarm start --orchestrator claude-sonnet --workers 2  to launch a swarm'",
   "remoteEnv": {
     "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
     "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
