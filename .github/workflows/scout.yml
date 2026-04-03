@@ -340,7 +340,7 @@ jobs:
               # Route: skills vs projects (CLAUDE.md §6 — two tracks)
               skill = is_skill(discovery)
               if skill is None:
-                  print(f"  ? Skipping {discovery['full_name']}: unable to classify as skill vs project this run")
+                  print(f"  ⚠ Skipping {discovery['full_name']}: unable to classify as skill vs project this run")
                   continue
               target_dir = "skills/discovered" if skill else "projects/discovered"
 

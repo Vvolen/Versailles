@@ -268,9 +268,11 @@ jobs:
                   context=f"SKILL.md check for {full_name}"
               )
               if resp is None:
-                  details["has_skill_md"] = None
+                  details["has_skill_md"] = False
+                  details["skill_md_check_failed"] = True
               else:
                   details["has_skill_md"] = resp.status_code == 200
+                  details["skill_md_check_failed"] = False
 
               # Recent commits (check last commit date)
               resp = github_get(
