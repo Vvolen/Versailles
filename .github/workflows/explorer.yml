@@ -239,6 +239,48 @@ jobs:
               print(f"  ⚠ Search returned {resp.status_code}: {query[:60]}")
               return []
 
+          _repo_metadata_cache = {}
+
+          def get_repo_metadata(full_name):
+              """Fetch repository metadata for code-search hits."""
+              if full_name in _repo_metadata_cache:
+                  return _repo_metadata_cache[full_name]
+              resp = github_get(
+                  f"https://api.github.com/repos/{full_name}",
+                  context=f"repo metadata for {full_name}"
+              )
+              if resp and resp.status_code == 200:
+                  _repo_metadata_cache[full_name] = resp.json()
+              else:
+                  _repo_metadata_cache[full_name] = None
+              return _repo_metadata_cache[full_name]
+
+          def search_code_repositories(query, per_page=None):
+              """Search GitHub code and return unique repository metadata."""
+              resp = github_get(
+                  "https://api.github.com/search/code",
+                  params={"q": query, "per_page": per_page or MAX_PER_QUERY},
+                  context=f"code search {query[:40]}"
+              )
+              if resp is None:
+                  return []
+              if resp.status_code != 200:
+                  print(f"  ⚠ Code search returned {resp.status_code}: {query[:60]}")
+                  return []
+
+              repos = []
+              seen = set()
+              for item in resp.json().get("items", []):
+                  repo_info = item.get("repository", {})
+                  full_name = repo_info.get("full_name")
+                  if not full_name or full_name in seen:
+                      continue
+                  seen.add(full_name)
+                  repo = get_repo_metadata(full_name)
+                  if repo and not repo.get("fork"):
+                      repos.append(repo)
+              return repos
+
           def get_repo_details(full_name):
               """Fetch detailed repo info including contributor count and recent commits."""
               details = {}
@@ -269,10 +311,8 @@ jobs:
               )
               if resp is None:
                   details["has_skill_md"] = False
-                  details["skill_md_check_failed"] = True
               else:
                   details["has_skill_md"] = resp.status_code == 200
-                  details["skill_md_check_failed"] = False
 
               # Recent commits (check last commit date)
               resp = github_get(
@@ -305,40 +345,40 @@ jobs:
               # Generate multiple query variants per target
               keywords = target.lower()
               if "skill" in keywords or "SKILL.md" in keywords.upper():
-                  search_queries.append(('"SKILL.md" in:readme stars:>10', "Claude Skill"))
-                  search_queries.append(('"agent skill" in:name,description stars:>10', "Claude Skill"))
-                  search_queries.append(("topic:agent-skills", "Claude Skill"))
+                  search_queries.append(("filename:SKILL.md", "Claude Skill", "code"))
+                  search_queries.append(('"agent skill" in:name,description stars:>10', "Claude Skill", "repo"))
+                  search_queries.append(("topic:agent-skills", "Claude Skill", "repo"))
               elif "mcp" in keywords or "model context protocol" in keywords:
-                  search_queries.append(("model-context-protocol server in:name,description,topics stars:>5", "MCP Server"))
-                  search_queries.append(("topic:mcp-server", "MCP Server"))
+                  search_queries.append(("model-context-protocol server in:name,description,topics stars:>5", "MCP Server", "repo"))
+                  search_queries.append(("topic:mcp-server", "MCP Server", "repo"))
               elif "orchestrat" in keywords or "multi-agent" in keywords:
-                  search_queries.append(('"multi-agent" orchestration in:name,description stars:>50', "AI Agent"))
-                  search_queries.append(('"agent framework" in:name,description stars:>100', "AI Agent"))
+                  search_queries.append(('"multi-agent" orchestration in:name,description stars:>50', "AI Agent", "repo"))
+                  search_queries.append(('"agent framework" in:name,description stars:>100', "AI Agent", "repo"))
               else:
                   # Use the target as a direct search query
-                  search_queries.append((f"{target} in:name,description,readme stars:>20", "AI Agent"))
+                  search_queries.append((f"{target} in:name,description,readme stars:>20", "AI Agent", "repo"))
 
               # Always add broad skill/project queries
-              search_queries.append((f"{target} in:name,description stars:>30", "General"))
+              search_queries.append((f"{target} in:name,description stars:>30", "General", "repo"))
 
           # Also check trusted orgs
           for org in TRUSTED_ORGS:
-              search_queries.append((f"org:{org} pushed:>{TODAY[:7]}-01", "Trusted Org"))
+              search_queries.append((f"org:{org} pushed:>{TODAY[:7]}-01", "Trusted Org", "repo"))
 
           # De-duplicate queries
           seen_queries = set()
           unique_queries = []
-          for q, cat in search_queries:
+          for q, cat, search_type in search_queries:
               if q not in seen_queries:
                   seen_queries.add(q)
-                  unique_queries.append((q, cat))
+                  unique_queries.append((q, cat, search_type))
 
           # Run searches and collect raw candidates
           raw_candidates = []
           seen_full_names = set()
-          for query, category in unique_queries:
+          for query, category, search_type in unique_queries:
               print(f"  Searching: {query[:70]}...")
-              results = search_github(query)
+              results = search_code_repositories(query) if search_type == "code" else search_github(query)
               for repo in results:
                   fn = repo["full_name"]
                   if fn not in seen_full_names and not repo.get("fork", False):
