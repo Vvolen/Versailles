@@ -60,10 +60,10 @@
   - Added `is_skill()` function checking for SKILL.md files and Claude Skill category
   - Added 3 SKILL.md-specific search queries from SEARCH_DIRECTIVES.md
 - 📝 Created **4 production-quality agent skills** (first real content in pipeline!):
-  - `deep-code-security-review-2026-04-02.md` — OWASP Top 10 code review skill
-  - `recursive-research-synthesis-2026-04-02.md` — Multi-layer research with synthesis
-  - `skill-architect-meta-skill-2026-04-02.md` — Meta-skill for creating agent skills
-  - `agent-orchestration-patterns-2026-04-02.md` — 5 multi-agent orchestration patterns
+  - `skills/quarantine/deep-code-security-review-2026-04-02-quarantine.md` — OWASP Top 10 code review skill
+  - `skills/evaluated/recursive-research-synthesis-2026-04-02-v1.md` — Multi-layer research with synthesis
+  - `skills/quarantine/skill-architect-meta-skill-2026-04-02-quarantine.md` — Meta-skill for creating agent skills
+  - `skills/quarantine/agent-orchestration-patterns-2026-04-02-quarantine.md` — 5 multi-agent orchestration patterns
 - ✏️ Updated `self-heal.yml` to validate Explorer agent directory and SOUL.md
 - ✏️ Updated `README.md` — architecture diagram, agent table, directory structure, badges
 - ✏️ Updated `AGENT_NOTES.md` — Entry 3 with session insights

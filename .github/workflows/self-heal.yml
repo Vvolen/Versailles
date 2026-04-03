@@ -154,6 +154,7 @@ jobs:
               "agents/evaluator/SOUL.md",
               "agents/evolver/SOUL.md",
               "agents/explorer/SOUL.md",
+              "agents/explorer/EXPLORATION_METHODOLOGY.md",
           ]
 
           issues = []

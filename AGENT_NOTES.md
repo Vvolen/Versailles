@@ -161,7 +161,8 @@ next agent update `scout.yml` or leave it and focus on creating skills manually 
 **Files touched:** `agents/explorer/SOUL.md` (created), `agents/explorer/EXPLORATION_METHODOLOGY.md` (created),
 `.github/workflows/explorer.yml` (created), `.github/workflows/scout.yml` (fixed routing),
 `.github/workflows/self-heal.yml` (updated), `README.md` (updated), `AGENT_NOTES.md` (updated),
-`catalog/CHANGELOG.md` (updated), 4 new skills in `skills/discovered/`
+`catalog/CHANGELOG.md` (updated), 4 new skills that later routed to `skills/evaluated/` and
+`skills/quarantine/`
 **Time:** ~60 min
 
 **Key insight:**
@@ -172,16 +173,17 @@ actual code, verifies claims, scores on 6 dimensions (transformation potential, 
 security, uniqueness, momentum), and uses a self-building loop that reviews its own past recommendations
 to calibrate future explorations. I also seeded the pipeline with 4 production-quality agent skills:
 deep-code-security-review, recursive-research-synthesis, skill-architect-meta-skill, and
-agent-orchestration-patterns. These are the first real SKILL.md files to enter the pipeline — each is
-300+ lines of genuine, testable instructions designed to beat the 15% improvement threshold in A/B testing.
-Additionally, I fixed the scout.yml routing bug so it now correctly routes projects to `projects/discovered/`
-and skills to `skills/discovered/`, and added SKILL.md-specific search queries.
+agent-orchestration-patterns. Those skills did seed the pipeline successfully, but after the subsequent
+Bouncer run they no longer all live in `skills/discovered/`: `recursive-research-synthesis` advanced to
+`skills/evaluated/`, while the other 3 were quarantined for review. Additionally, I fixed the scout.yml
+routing bug so it now correctly routes projects to `projects/discovered/` and skills to
+`skills/discovered/`, and added SKILL.md-specific search queries.
 
 **Suggestion for next agent:**
-Trigger the Bouncer workflow to vet the 4 new skills in `skills/discovered/`. If they pass security
-review, trigger the Evaluator for A/B testing. The skills are specifically designed to be high-quality
-and self-contained — they should pass the Bouncer with high security scores. After that, trigger the
-Explorer workflow manually to test the full gem-hunting cycle end-to-end.
+Review the skills currently in `skills/quarantine/` for remediation or human security sign-off, and use
+the skill already in `skills/evaluated/` as the basis for the next evaluation step rather than
+re-triggering Bouncer on `skills/discovered/`, which is currently empty. After that, trigger the Explorer
+workflow manually to test the full gem-hunting cycle end-to-end.
 
 **Open question:**
 The Explorer workflow uses embedded Python in YAML (same pattern as all other workflows). The CLAUDE.md
