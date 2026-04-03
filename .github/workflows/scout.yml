@@ -7,7 +7,7 @@
 #   1. Searches GitHub for trending repositories in key categories
 #   2. Checks Anthropic and ModelContextProtocol orgs for new releases
 #   3. Scores each discovery against our CRITERIA.md rubric
-#   4. Saves results to skills/discovered/ and catalog/
+#   4. Routes skills to skills/discovered/ and projects to projects/discovered/
 #   5. Commits the findings and triggers the Bouncer workflow
 #
 # For non-developers: This is like a web spider that wakes up every 6 hours,
@@ -83,6 +83,9 @@ jobs:
           CUSTOM_QUERY = os.environ.get("CUSTOM_QUERY", "")
           TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
+          REQUEST_TIMEOUT = 15
+          RATE_LIMIT_STATUSES = {403, 429}
+
           headers = {
               "Authorization": f"token {GITHUB_TOKEN}",
               "Accept": "application/vnd.github.v3+json",
@@ -97,6 +100,12 @@ jobs:
               ("claude agent workflow automation in:name,description stars:>50", "AI Agent"),
               ("anthropic claude plugin extension in:name,description stars:>20", "Plugin"),
               ("mcp server tools claude in:readme stars:>30", "MCP Server"),
+              # Skill-specific repository searches (from SEARCH_DIRECTIVES.md)
+              ('"agent skill" in:name,description stars:>10', "Claude Skill"),
+              ("topic:agent-skills", "Claude Skill"),
+          ]
+          SKILL_CODE_SEARCHES = [
+              ("filename:SKILL.md", "Claude Skill"),
           ]
 
           # Also check these orgs directly for new releases
@@ -105,6 +114,8 @@ jobs:
               "modelcontextprotocol",
               "anthropic-cookbook",
           ]
+          _skill_check_cache = {}  # Cache for SKILL.md existence checks
+          _repo_cache = {}         # Cache for repo metadata fetches
 
           def search_github(query, per_page=None):
               """Search GitHub repositories."""
@@ -115,12 +126,74 @@ jobs:
                   "order": "desc",
                   "per_page": per_page or MAX_RESULTS
               }
-              resp = requests.get(url, headers=headers, params=params)
+              try:
+                  resp = requests.get(url, headers=headers, params=params, timeout=REQUEST_TIMEOUT)
+              except requests.RequestException as e:
+                  print(f"  Warning: search error for '{query}': {e}")
+                  return []
               if resp.status_code == 200:
                   return resp.json().get("items", [])
+              elif resp.status_code in RATE_LIMIT_STATUSES:
+                  print(f"  Warning: search throttled ({resp.status_code}): {query}")
+                  return []
               else:
                   print(f"  Warning: search failed ({resp.status_code}): {query}")
                   return []
+
+          def get_repo_metadata(full_name):
+              """Fetch full repository metadata for code-search hits."""
+              if full_name in _repo_cache:
+                  return _repo_cache[full_name]
+              try:
+                  resp = requests.get(
+                      f"https://api.github.com/repos/{full_name}",
+                      headers=headers,
+                      timeout=REQUEST_TIMEOUT
+                  )
+              except requests.RequestException as e:
+                  print(f"  Warning: repo metadata lookup failed for {full_name}: {e}")
+                  _repo_cache[full_name] = None
+                  return None
+              if resp.status_code == 200:
+                  _repo_cache[full_name] = resp.json()
+              elif resp.status_code in RATE_LIMIT_STATUSES:
+                  print(f"  Warning: repo metadata throttled ({resp.status_code}) for {full_name}")
+                  _repo_cache[full_name] = None
+              else:
+                  _repo_cache[full_name] = None
+              return _repo_cache[full_name]
+
+          def search_code_repositories(query, per_page=None):
+              """Search GitHub code and return unique repository metadata."""
+              url = "https://api.github.com/search/code"
+              params = {
+                  "q": query,
+                  "per_page": per_page or MAX_RESULTS
+              }
+              try:
+                  resp = requests.get(url, headers=headers, params=params, timeout=REQUEST_TIMEOUT)
+              except requests.RequestException as e:
+                  print(f"  Warning: code search error for '{query}': {e}")
+                  return []
+              if resp.status_code in RATE_LIMIT_STATUSES:
+                  print(f"  Warning: code search throttled ({resp.status_code}): {query}")
+                  return []
+              if resp.status_code != 200:
+                  print(f"  Warning: code search failed ({resp.status_code}): {query}")
+                  return []
+
+              repos = []
+              seen = set()
+              for item in resp.json().get("items", []):
+                  repo_info = item.get("repository", {})
+                  full_name = repo_info.get("full_name")
+                  if not full_name or full_name in seen:
+                      continue
+                  seen.add(full_name)
+                  repo = get_repo_metadata(full_name)
+                  if repo and not repo.get("fork"):
+                      repos.append(repo)
+              return repos
 
           def score_repo(repo):
               """
@@ -215,6 +288,39 @@ jobs:
                   "is_fork": repo.get("fork", False),
               }
 
+          def is_skill(discovery):
+              """
+              Determine if a discovery is an agent skill (→ skills/) or a
+              project (→ projects/).  A discovery is a skill if:
+                - Its category is "Claude Skill", OR
+                - The source repo contains a SKILL.md file (checked via API)
+              Note: caches results to avoid redundant API calls and rate limit
+              consumption when processing many discoveries.
+              """
+              if discovery["category"] == "Claude Skill":
+                  return True
+              # Check the repo for a SKILL.md file (with caching)
+              cache_key = discovery["full_name"]
+              if cache_key in _skill_check_cache:
+                  return _skill_check_cache[cache_key]
+              owner = discovery["owner"]
+              repo_name = discovery["name"]
+              api_url = f"https://api.github.com/repos/{owner}/{repo_name}/contents/SKILL.md"
+              try:
+                  resp = requests.get(api_url, headers=headers, timeout=REQUEST_TIMEOUT)
+                  if resp.status_code == 200:
+                      result = True
+                  elif resp.status_code in RATE_LIMIT_STATUSES:
+                      print(f"  Warning: SKILL.md check throttled ({resp.status_code}) for {cache_key}: classification skipped this run")
+                      result = None
+                  else:
+                      result = False
+              except requests.RequestException as e:
+                  print(f"  Warning: SKILL.md check failed for {cache_key}: {e}. Classification skipped this run")
+                  result = None
+              _skill_check_cache[cache_key] = result
+              return result
+
           # ── Run all searches ─────────────────────────────────────────────
           print("🔭 Scout starting...")
           all_discoveries = []
@@ -238,16 +344,36 @@ jobs:
                       seen_full_names.add(repo["full_name"])
                       all_discoveries.append(repo_to_discovery(repo, category))
 
+          # Code search for actual SKILL.md files
+          for query, category in SKILL_CODE_SEARCHES:
+              print(f"  Code searching: {category}...")
+              results = search_code_repositories(query)
+              for repo in results:
+                  if repo["full_name"] not in seen_full_names:
+                      seen_full_names.add(repo["full_name"])
+                      all_discoveries.append(repo_to_discovery(repo, category))
+
           # Check trusted orgs for recent activity
           for org in TRUSTED_ORGS:
               print(f"  Checking org: {org}...")
               url = f"https://api.github.com/orgs/{org}/repos"
-              resp = requests.get(url, headers=headers, params={"sort": "updated", "per_page": 10})
+              try:
+                  resp = requests.get(
+                      url,
+                      headers=headers,
+                      params={"sort": "updated", "per_page": 10},
+                      timeout=REQUEST_TIMEOUT
+                  )
+              except requests.RequestException as e:
+                  print(f"  Warning: org lookup failed for {org}: {e}")
+                  continue
               if resp.status_code == 200:
                   for repo in resp.json():
                       if repo["full_name"] not in seen_full_names:
                           seen_full_names.add(repo["full_name"])
                           all_discoveries.append(repo_to_discovery(repo, "Trusted Org"))
+              elif resp.status_code in RATE_LIMIT_STATUSES:
+                  print(f"  Warning: org lookup throttled ({resp.status_code}): {org}")
 
           print(f"  Found {len(all_discoveries)} total discoveries")
 
@@ -270,15 +396,23 @@ jobs:
 
           # ── Write new discovery files ────────────────────────────────────
           os.makedirs("skills/discovered", exist_ok=True)
+          os.makedirs("projects/discovered", exist_ok=True)
           new_count = 0
 
           for discovery in quality_discoveries:
               if discovery["url"] in existing_urls:
                   continue  # Already in catalog
 
+              # Route: skills vs projects (CLAUDE.md §6 — two tracks)
+              skill = is_skill(discovery)
+              if skill is None:
+                  print(f"  ⚠ Skipping {discovery['full_name']}: unable to classify as skill vs project this run")
+                  continue
+              target_dir = "skills/discovered" if skill else "projects/discovered"
+
               # Write individual discovery file
               safe_name = discovery["name"].lower().replace(" ", "-").replace("/", "-")
-              filepath = f"skills/discovered/{safe_name}-{TODAY}.md"
+              filepath = f"{target_dir}/{safe_name}-{TODAY}.md"
 
               # Don't overwrite if already discovered today
               if os.path.exists(filepath):
@@ -343,12 +477,12 @@ jobs:
         run: |
           git config user.name "Scout Agent"
           git config user.email "scout@versailles.bot"
-          git add skills/discovered/ catalog/
+          git add skills/discovered/ projects/discovered/ catalog/
           # Only commit if there are actual changes
           if git diff --staged --quiet; then
             echo "No new discoveries this run."
           else
-            DISCOVERY_COUNT=$(git diff --staged --name-only | grep "skills/discovered" | wc -l)
+            DISCOVERY_COUNT=$(git diff --staged --name-only | grep -E "(skills|projects)/discovered" | wc -l)
             git commit -m "scout: discovered ${DISCOVERY_COUNT} new tool(s) [$(date -u '+%Y-%m-%d %H:%M UTC')]"
             git push
             echo "Discoveries committed and pushed."

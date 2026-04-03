@@ -1,0 +1,838 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EXPLORER WORKFLOW
+# Purpose: Deep strategic exploration of GitHub for phase-change discoveries.
+#          The Explorer goes beyond the Scout's wide net — it investigates
+#          promising leads with research-grade depth, scores them on 6
+#          dimensions, and routes them to the correct pipeline track.
+#
+# What it does:
+#   1. Reads AGENT_NOTES.md and catalog files for intelligence gathering
+#   2. Searches GitHub deeply for high-value tools and agent skills
+#   3. Checks actual repo content: README quality, SKILL.md files, commit
+#      recency, contributor count — not just star counts
+#   4. Scores each find on 6 dimensions from EXPLORATION_METHODOLOGY.md
+#   5. Routes skills to skills/discovered/ and projects to projects/discovered/
+#   6. Updates AGENT_NOTES.md, catalog files, and CHANGELOG.md
+#
+# How it differs from Scout:
+#   - Scout runs every 6 hours and casts a wide net (volume)
+#   - Explorer runs weekly or on-demand and goes deep (quality)
+#   - Explorer reads code, checks issues, verifies claims
+#   - Explorer uses a 6-dimension gem scoring rubric (0-100)
+#   - Explorer produces 1-5 gems per run, not 10-50 discoveries
+#
+# For non-developers: If the Scout is a fishing trawler sweeping the ocean,
+# the Explorer is a deep-sea diver looking for specific rare species. It
+# takes longer, finds fewer things, but what it finds is extraordinary.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: 🧭 Explorer
+
+on:
+  schedule:
+    # Run weekly on Mondays at 3 AM UTC
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      exploration_target:
+        description: "What to explore (e.g. 'MCP servers for database orchestration')"
+        required: false
+        default: ""
+      depth:
+        description: "Exploration depth"
+        required: false
+        default: "standard"
+        type: choice
+        options:
+          - standard
+          - deep
+
+# Only allow one explorer run at a time
+concurrency:
+  group: explorer
+  cancel-in-progress: false
+
+jobs:
+  explore:
+    name: Deep Exploration
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    permissions:
+      contents: write    # To commit discoveries and update catalog
+      issues: write      # To create issues for architectural proposals
+
+    steps:
+      # ── Step 1: Check out the repository ──────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ── Step 2: Set up Python environment ─────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests python-dateutil
+
+      # ── Step 3: Run the explorer script ─────────────────────────────────
+      # Implements the 5-phase exploration methodology from
+      # agents/explorer/EXPLORATION_METHODOLOGY.md
+      - name: Run explorer
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXPLORATION_TARGET: ${{ github.event.inputs.exploration_target || '' }}
+          EXPLORATION_DEPTH: ${{ github.event.inputs.depth || 'standard' }}
+        run: |
+          python3 << 'EXPLORER_SCRIPT'
+          import os
+          import re
+          import json
+          import requests
+          from datetime import datetime, timezone
+          from dateutil.parser import parse as parse_date
+
+          GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+          EXPLORATION_TARGET = os.environ.get("EXPLORATION_TARGET", "")
+          EXPLORATION_DEPTH = os.environ.get("EXPLORATION_DEPTH", "standard")
+          TODAY = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          MAX_PER_QUERY = 15 if EXPLORATION_DEPTH == "standard" else 30
+          # Security gate threshold (EXPLORATION_METHODOLOGY.md §Phase 3):
+          # If Security Posture < this value, cap total gem score at 40,
+          # preventing promotion of tools with serious security concerns.
+          SECURITY_GATE_THRESHOLD = 5
+          SECURITY_GATE_CAP = 40
+          REQUEST_TIMEOUT = 15
+          RATE_LIMIT_STATUSES = {403, 429}
+
+          headers = {
+              "Authorization": f"token {GITHUB_TOKEN}",
+              "Accept": "application/vnd.github.v3+json",
+              "X-GitHub-Api-Version": "2022-11-28"
+          }
+
+          TRUSTED_ORGS = ["anthropics", "modelcontextprotocol", "github"]
+
+          def github_get(url, *, params=None, context="request"):
+              """GET helper with timeout and explicit rate-limit handling."""
+              try:
+                  resp = requests.get(url, headers=headers, params=params, timeout=REQUEST_TIMEOUT)
+              except requests.RequestException as e:
+                  print(f"  ⚠ {context} failed: {e}")
+                  return None
+
+              if resp.status_code in RATE_LIMIT_STATUSES:
+                  print(f"  ⚠ {context} throttled ({resp.status_code}); skipping this request")
+                  return None
+
+              return resp
+
+          # ================================================================
+          # PHASE 1: INTELLIGENCE GATHERING
+          # Read agent memory, catalog, and directives before exploring.
+          # ================================================================
+          print("=" * 60)
+          print("🧭 Explorer — Phase 1: Intelligence Gathering")
+          print("=" * 60)
+
+          # Step 1.1 — Read last 5 entries from AGENT_NOTES.md
+          agent_suggestions = []
+          open_questions = []
+          try:
+              with open("AGENT_NOTES.md") as f:
+                  notes_content = f.read()
+              entries = re.split(r"(?=^## Entry \d+)", notes_content, flags=re.MULTILINE)
+              recent_entries = entries[-5:] if len(entries) > 5 else entries
+              for entry in recent_entries:
+                  sugg = re.search(r"\*\*Suggestion for next agent:\*\*\s*(.+?)(?:\n\n|\n\*\*)", entry, re.DOTALL)
+                  if sugg:
+                      agent_suggestions.append(sugg.group(1).strip())
+                  oq = re.search(r"\*\*Open question:\*\*\s*(.+?)(?:\n\n|\n\*\*)", entry, re.DOTALL)
+                  if oq:
+                      open_questions.append(oq.group(1).strip())
+              print(f"  Read {len(recent_entries)} recent agent notes")
+              if agent_suggestions:
+                  print(f"  Agent suggestions: {len(agent_suggestions)}")
+          except FileNotFoundError:
+              print("  AGENT_NOTES.md not found — starting fresh")
+
+          # Step 1.2 — Scan catalog for gaps
+          catalog_categories = {}
+          catalog_urls = set()
+          for catalog_file in ["catalog/tools.json", "catalog/mcps.json", "catalog/plugins.json"]:
+              try:
+                  with open(catalog_file) as f:
+                      data = json.load(f)
+                  items_key = "tools" if "tools" in data else "mcps" if "mcps" in data else "plugins"
+                  items = data.get(items_key, [])
+                  for item in items:
+                      cat = item.get("category", "Unknown")
+                      catalog_categories[cat] = catalog_categories.get(cat, 0) + 1
+                      catalog_urls.add(item.get("url", ""))
+              except (FileNotFoundError, json.JSONDecodeError):
+                  pass
+
+          sparse_categories = [c for c, count in catalog_categories.items() if count < 3]
+          print(f"  Catalog has {len(catalog_urls)} known URLs")
+          if sparse_categories:
+              print(f"  Under-represented categories: {', '.join(sparse_categories)}")
+
+          # Step 1.3 — Read SEARCH_DIRECTIVES.md priorities
+          priority_topics = []
+          try:
+              with open("SEARCH_DIRECTIVES.md") as f:
+                  directives = f.read()
+              # Extract priority category headers
+              for m in re.finditer(r"####\s+\d+\.\s+(.+)", directives):
+                  priority_topics.append(m.group(1).strip())
+              print(f"  Priority topics from directives: {len(priority_topics)}")
+          except FileNotFoundError:
+              print("  SEARCH_DIRECTIVES.md not found")
+
+          # Step 1.4 — Formulate exploration targets
+          targets = []
+          if EXPLORATION_TARGET:
+              targets.append(EXPLORATION_TARGET)
+              print(f"  Manual target: {EXPLORATION_TARGET}")
+          else:
+              # Auto-generate targets from gaps and suggestions
+              if "MCP Server" in sparse_categories or not sparse_categories:
+                  targets.append("MCP servers for database, memory, or search")
+              if "Claude Skill" in sparse_categories or not sparse_categories:
+                  targets.append("agent skills and SKILL.md files")
+              if agent_suggestions:
+                  # Use the most recent suggestion as a target
+                  targets.append(agent_suggestions[-1][:100])
+              if not targets:
+                  targets.append("multi-agent orchestration frameworks")
+              print(f"  Auto-generated {len(targets)} exploration targets")
+
+          for i, t in enumerate(targets, 1):
+              print(f"    Target {i}: {t}")
+
+          # ================================================================
+          # PHASE 2: DEEP RESEARCH
+          # Search GitHub and investigate candidates deeply.
+          # ================================================================
+          print()
+          print("=" * 60)
+          print("🧭 Explorer — Phase 2: Deep Research")
+          print("=" * 60)
+
+          def search_github(query, per_page=None):
+              """Search GitHub repositories."""
+              url = "https://api.github.com/search/repositories"
+              params = {
+                  "q": query,
+                  "sort": "stars",
+                  "order": "desc",
+                  "per_page": per_page or MAX_PER_QUERY
+              }
+              resp = github_get(url, params=params, context=f"search {query[:40]}")
+              if resp is None:
+                  return []
+              if resp.status_code == 200:
+                  return resp.json().get("items", [])
+              print(f"  ⚠ Search returned {resp.status_code}: {query[:60]}")
+              return []
+
+          _repo_metadata_cache = {}
+
+          def get_repo_metadata(full_name):
+              """Fetch repository metadata for code-search hits."""
+              if full_name in _repo_metadata_cache:
+                  return _repo_metadata_cache[full_name]
+              resp = github_get(
+                  f"https://api.github.com/repos/{full_name}",
+                  context=f"repo metadata for {full_name}"
+              )
+              if resp and resp.status_code == 200:
+                  _repo_metadata_cache[full_name] = resp.json()
+              else:
+                  _repo_metadata_cache[full_name] = None
+              return _repo_metadata_cache[full_name]
+
+          def search_code_repositories(query, per_page=None):
+              """Search GitHub code and return unique repository metadata."""
+              resp = github_get(
+                  "https://api.github.com/search/code",
+                  params={"q": query, "per_page": per_page or MAX_PER_QUERY},
+                  context=f"code search {query[:40]}"
+              )
+              if resp is None:
+                  return []
+              if resp.status_code != 200:
+                  print(f"  ⚠ Code search returned {resp.status_code}: {query[:60]}")
+                  return []
+
+              repos = []
+              seen = set()
+              for item in resp.json().get("items", []):
+                  repo_info = item.get("repository", {})
+                  full_name = repo_info.get("full_name")
+                  if not full_name or full_name in seen:
+                      continue
+                  seen.add(full_name)
+                  repo = get_repo_metadata(full_name)
+                  if repo and not repo.get("fork"):
+                      repos.append(repo)
+              return repos
+
+          def get_repo_details(full_name):
+              """Fetch detailed repo info including contributor count and recent commits."""
+              details = {}
+              # Repo metadata
+              url = f"https://api.github.com/repos/{full_name}"
+              resp = github_get(url, context=f"repo metadata for {full_name}")
+              if resp and resp.status_code == 200:
+                  details["repo"] = resp.json()
+
+              # Contributors count (just first page to estimate)
+              resp = github_get(
+                  f"https://api.github.com/repos/{full_name}/contributors",
+                  params={"per_page": 1, "anon": "true"},
+                  context=f"contributors for {full_name}"
+              )
+              if resp and resp.status_code == 200:
+                  # Parse Link header for total count
+                  link = resp.headers.get("Link", "")
+                  match = re.search(r'page=(\d+)>; rel="last"', link)
+                  details["contributor_count"] = int(match.group(1)) if match else len(resp.json())
+              else:
+                  details["contributor_count"] = 0
+
+              # Check for SKILL.md
+              resp = github_get(
+                  f"https://api.github.com/repos/{full_name}/contents/SKILL.md",
+                  context=f"SKILL.md check for {full_name}"
+              )
+              if resp is None:
+                  details["has_skill_md"] = False
+              else:
+                  details["has_skill_md"] = resp.status_code == 200
+
+              # Recent commits (check last commit date)
+              resp = github_get(
+                  f"https://api.github.com/repos/{full_name}/commits",
+                  params={"per_page": 1},
+                  context=f"commits for {full_name}"
+              )
+              if resp and resp.status_code == 200:
+                  commits = resp.json()
+                  if commits:
+                      details["last_commit"] = commits[0].get("commit", {}).get("committer", {}).get("date", "")
+
+              # README quality check
+              resp = github_get(
+                  f"https://api.github.com/repos/{full_name}/readme",
+                  context=f"README for {full_name}"
+              )
+              if resp and resp.status_code == 200:
+                  readme_data = resp.json()
+                  # size is in bytes — a good README is typically > 1000 bytes
+                  details["readme_size"] = readme_data.get("size", 0)
+              else:
+                  details["readme_size"] = 0
+
+              return details
+
+          # Build search queries from exploration targets
+          search_queries = []
+          for target in targets:
+              # Generate multiple query variants per target
+              keywords = target.lower()
+              if "skill" in keywords or "SKILL.md" in keywords.upper():
+                  search_queries.append(("filename:SKILL.md", "Claude Skill", "code"))
+                  search_queries.append(('"agent skill" in:name,description stars:>10', "Claude Skill", "repo"))
+                  search_queries.append(("topic:agent-skills", "Claude Skill", "repo"))
+              elif "mcp" in keywords or "model context protocol" in keywords:
+                  search_queries.append(("model-context-protocol server in:name,description,topics stars:>5", "MCP Server", "repo"))
+                  search_queries.append(("topic:mcp-server", "MCP Server", "repo"))
+              elif "orchestrat" in keywords or "multi-agent" in keywords:
+                  search_queries.append(('"multi-agent" orchestration in:name,description stars:>50', "AI Agent", "repo"))
+                  search_queries.append(('"agent framework" in:name,description stars:>100', "AI Agent", "repo"))
+              else:
+                  # Use the target as a direct search query
+                  search_queries.append((f"{target} in:name,description,readme stars:>20", "AI Agent", "repo"))
+
+              # Always add broad skill/project queries
+              search_queries.append((f"{target} in:name,description stars:>30", "General", "repo"))
+
+          # Also check trusted orgs
+          for org in TRUSTED_ORGS:
+              search_queries.append((f"org:{org} pushed:>{TODAY[:7]}-01", "Trusted Org", "repo"))
+
+          # De-duplicate queries
+          seen_queries = set()
+          unique_queries = []
+          for q, cat, search_type in search_queries:
+              if q not in seen_queries:
+                  seen_queries.add(q)
+                  unique_queries.append((q, cat, search_type))
+
+          # Run searches and collect raw candidates
+          raw_candidates = []
+          seen_full_names = set()
+          for query, category, search_type in unique_queries:
+              print(f"  Searching: {query[:70]}...")
+              results = search_code_repositories(query) if search_type == "code" else search_github(query)
+              for repo in results:
+                  fn = repo["full_name"]
+                  if fn not in seen_full_names and not repo.get("fork", False):
+                      seen_full_names.add(fn)
+                      raw_candidates.append((repo, category))
+
+          print(f"  Found {len(raw_candidates)} raw candidates")
+
+          # Surface filtering (Step 2.2)
+          filtered = []
+          for repo, category in raw_candidates:
+              url = repo.get("html_url", "")
+              if url in catalog_urls:
+                  continue  # Already in catalog
+              desc = repo.get("description", "") or ""
+              stars = repo.get("stargazers_count", 0)
+              updated = repo.get("updated_at", "")
+
+              # Skip forks with no meaningful presence
+              if repo.get("fork", False):
+                  continue
+              # Skip repos with no description at all
+              if not desc.strip():
+                  continue
+              # Skip very stale + unpopular repos
+              if updated:
+                  days_since = (datetime.now(timezone.utc) - parse_date(updated)).days
+                  if days_since > 180 and stars < 20:
+                      continue
+
+              filtered.append((repo, category))
+
+          print(f"  After surface filtering: {len(filtered)} candidates")
+
+          # Deep dive (Step 2.3) — investigate top candidates
+          max_deep_dive = 10 if EXPLORATION_DEPTH == "standard" else 20
+          # Sort by stars descending for priority
+          filtered.sort(key=lambda x: x[0].get("stargazers_count", 0), reverse=True)
+          deep_candidates = filtered[:max_deep_dive]
+
+          investigated = []
+          for repo, category in deep_candidates:
+              fn = repo["full_name"]
+              print(f"  🔍 Deep dive: {fn}")
+              details = get_repo_details(fn)
+              investigated.append({
+                  "repo": repo,
+                  "category": category,
+                  "details": details,
+              })
+
+          print(f"  Deep-dived {len(investigated)} candidates")
+
+          # ================================================================
+          # PHASE 3: GEM SCORING
+          # Score each candidate on 6 dimensions (0-100 total).
+          # ================================================================
+          print()
+          print("=" * 60)
+          print("🧭 Explorer — Phase 3: Gem Scoring")
+          print("=" * 60)
+
+          def score_gem(repo, details):
+              """
+              Score on 6 dimensions from EXPLORATION_METHODOLOGY.md:
+              1. Transformation Potential (0-17)
+              2. Integration Fit (0-17)
+              3. Quality & Maturity (0-17)
+              4. Security Posture (0-17)
+              5. Uniqueness (0-16)
+              6. Momentum (0-16)
+              Total: 0-100
+              """
+              scores = {}
+              notes = {}
+              stars = repo.get("stargazers_count", 0)
+              forks = repo.get("forks_count", 0)
+              topics = repo.get("topics", [])
+              desc = repo.get("description", "") or ""
+              language = repo.get("language", "")
+              owner_login = repo.get("owner", {}).get("login", "").lower()
+              contributor_count = details.get("contributor_count", 0)
+              readme_size = details.get("readme_size", 0)
+              has_skill_md = details.get("has_skill_md", False)
+              updated = repo.get("updated_at", "")
+              created = repo.get("created_at", "")
+
+              # 1. Transformation Potential (0-17)
+              tp = 5  # baseline
+              if stars >= 5000:
+                  tp = 14
+              elif stars >= 1000:
+                  tp = 11
+              elif stars >= 200:
+                  tp = 8
+              # Bonus for MCP/agent/skill topics
+              agent_topics = {"mcp", "agent", "agents", "multi-agent", "orchestration", "skill", "agent-skills"}
+              if agent_topics & set(t.lower() for t in topics):
+                  tp = min(17, tp + 2)
+              if has_skill_md:
+                  tp = min(17, tp + 2)
+              scores["transformation"] = tp
+              notes["transformation"] = f"★{stars}, topics overlap={bool(agent_topics & set(t.lower() for t in topics))}"
+
+              # 2. Integration Fit (0-17)
+              fit = 7  # baseline
+              if owner_login in [o.lower() for o in TRUSTED_ORGS]:
+                  fit = 14
+              if language in ("Python", "TypeScript", "JavaScript", "Go"):
+                  fit = min(17, fit + 2)
+              if any(t in ["mcp", "mcp-server", "claude", "agent-skills"] for t in topics):
+                  fit = min(17, fit + 2)
+              scores["integration"] = fit
+              notes["integration"] = f"lang={language}, org={owner_login}"
+
+              # 3. Quality & Maturity (0-17)
+              quality = 5
+              if readme_size >= 5000:
+                  quality += 4
+              elif readme_size >= 1000:
+                  quality += 2
+              if contributor_count >= 10:
+                  quality += 4
+              elif contributor_count >= 3:
+                  quality += 2
+              if stars >= 100:
+                  quality += 2
+              if forks >= 20:
+                  quality += 2
+              quality = min(17, quality)
+              scores["quality"] = quality
+              notes["quality"] = f"readme={readme_size}B, contributors={contributor_count}"
+
+              # 4. Security Posture (0-17)
+              security = 10  # baseline neutral
+              if owner_login in [o.lower() for o in TRUSTED_ORGS]:
+                  security = 15
+              if created:
+                  try:
+                      age_days = (datetime.now(timezone.utc) - parse_date(created)).days
+                      if age_days >= 365:
+                          security = min(17, security + 2)
+                      elif age_days < 30:
+                          security = max(0, security - 4)
+                  except Exception:
+                      pass
+              if stars < 5:
+                  security = max(0, security - 3)
+              scores["security"] = security
+              notes["security"] = f"org_trusted={owner_login in [o.lower() for o in TRUSTED_ORGS]}"
+
+              # 5. Uniqueness (0-16)
+              unique = 8  # baseline
+              # Check if name/description overlaps with existing catalog
+              for existing_url in catalog_urls:
+                  if repo.get("name", "").lower() in existing_url.lower():
+                      unique = 3
+                      break
+              if has_skill_md:
+                  unique = min(16, unique + 3)
+              scores["uniqueness"] = unique
+              notes["uniqueness"] = f"has_skill_md={has_skill_md}, catalog_overlap_check"
+
+              # 6. Momentum (0-16)
+              momentum = 6
+              if updated:
+                  try:
+                      days_since = (datetime.now(timezone.utc) - parse_date(updated)).days
+                      if days_since <= 7:
+                          momentum = 14
+                      elif days_since <= 30:
+                          momentum = 11
+                      elif days_since <= 90:
+                          momentum = 8
+                      elif days_since > 180:
+                          momentum = 3
+                  except Exception:
+                      pass
+              if stars >= 500 and forks >= 50:
+                  momentum = min(16, momentum + 2)
+              scores["momentum"] = momentum
+              notes["momentum"] = f"updated={updated[:10] if updated else 'unknown'}"
+
+              total = sum(scores.values())
+
+              # Security gate (EXPLORATION_METHODOLOGY.md): a tool with critical
+              # security concerns cannot be a gem regardless of other dimensions.
+              if scores["security"] < SECURITY_GATE_THRESHOLD:
+                  total = min(total, SECURITY_GATE_CAP)
+
+              return total, scores, notes
+
+          def classify_gem(score):
+              """Classify gem score per EXPLORATION_METHODOLOGY.md."""
+              if score >= 85:
+                  return "💎 Exceptional Gem", "immediate_adopt"
+              elif score >= 70:
+                  return "🔷 Strong Gem", "evaluate_further"
+              elif score >= 55:
+                  return "🔹 Interesting Find", "monitor"
+              elif score >= 40:
+                  return "◽ Marginal", "monitor"
+              else:
+                  return "⬜ Not a Gem", "skip"
+
+          scored_gems = []
+          for item in investigated:
+              repo = item["repo"]
+              details = item["details"]
+              category = item["category"]
+
+              total, dim_scores, dim_notes = score_gem(repo, details)
+              classification, action = classify_gem(total)
+
+              gem = {
+                  "name": repo["name"],
+                  "full_name": repo["full_name"],
+                  "url": repo["html_url"],
+                  "description": repo.get("description", "") or "",
+                  "category": category,
+                  "stars": repo.get("stargazers_count", 0),
+                  "forks": repo.get("forks_count", 0),
+                  "language": repo.get("language", ""),
+                  "topics": repo.get("topics", []),
+                  "last_updated": repo.get("updated_at", ""),
+                  "discovered_at": TODAY,
+                  "owner": repo.get("owner", {}).get("login", ""),
+                  "is_fork": repo.get("fork", False),
+                  "gem_score": total,
+                  "dim_scores": dim_scores,
+                  "dim_notes": dim_notes,
+                  "classification": classification,
+                  "action": action,
+                  "has_skill_md": details.get("has_skill_md", False),
+                  "contributor_count": details.get("contributor_count", 0),
+                  "readme_size": details.get("readme_size", 0),
+              }
+              scored_gems.append(gem)
+              print(f"  {classification} {repo['full_name']} — score: {total}/100 → {action}")
+
+          # Sort by gem score descending
+          scored_gems.sort(key=lambda x: x["gem_score"], reverse=True)
+
+          # ================================================================
+          # PHASE 4: STRATEGIC DECISION
+          # Decide what to do with each gem.
+          # ================================================================
+          print()
+          print("=" * 60)
+          print("🧭 Explorer — Phase 4: Strategic Decision")
+          print("=" * 60)
+
+          actionable_gems = [g for g in scored_gems if g["action"] != "skip"]
+          print(f"  Actionable gems: {len(actionable_gems)} / {len(scored_gems)}")
+
+          def is_gem_skill(gem):
+              """Determine if a gem should be routed to skills/ or projects/."""
+              if gem["has_skill_md"]:
+                  return True
+              if gem["category"] == "Claude Skill":
+                  return True
+              return False
+
+          # ================================================================
+          # PHASE 5: REPORT & RECORD
+          # Write discovery files, update catalogs, commit.
+          # ================================================================
+          print()
+          print("=" * 60)
+          print("🧭 Explorer — Phase 5: Report & Record")
+          print("=" * 60)
+
+          os.makedirs("skills/discovered", exist_ok=True)
+          os.makedirs("projects/discovered", exist_ok=True)
+          new_skills = 0
+          new_projects = 0
+          written_gems = []
+
+          for gem in actionable_gems:
+              if gem["url"] in catalog_urls:
+                  continue
+
+              skill = is_gem_skill(gem)
+              target_dir = "skills/discovered" if skill else "projects/discovered"
+              safe_name = gem["name"].lower().replace(" ", "-").replace("/", "-")
+              filepath = f"{target_dir}/{safe_name}-{TODAY}.md"
+
+              if os.path.exists(filepath):
+                  continue
+
+              # Build dimensional score table
+              dim_table = ""
+              for dim_name, max_score in [
+                  ("Transformation Potential", 17), ("Integration Fit", 17),
+                  ("Quality & Maturity", 17), ("Security Posture", 17),
+                  ("Uniqueness", 16), ("Momentum", 16),
+              ]:
+                  key = dim_name.split()[0].lower()
+                  val = gem["dim_scores"].get(key, 0)
+                  note = gem["dim_notes"].get(key, "")
+                  dim_table += f"| {dim_name} | {val}/{max_score} | {note} |\n"
+
+              content = f"""# Exploration Report: {gem['name']}
+
+**Explorer:** Explorer Agent
+**Date:** {TODAY}
+**Gem Score:** {gem['gem_score']}/100
+**Classification:** {gem['classification']}
+**Recommended Action:** {gem['action']}
+**Status:** pending-bouncer-review
+
+## Executive Summary
+{gem['description'] or 'No description provided.'}
+
+## Gem Score Breakdown
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+{dim_table}| **Total** | **{gem['gem_score']}/100** | |
+
+## Source Metadata
+- **URL:** {gem['url']}
+- **Stars:** {gem['stars']}
+- **Forks:** {gem['forks']}
+- **Language:** {gem['language'] or 'N/A'}
+- **Topics:** {', '.join(gem['topics']) or 'None'}
+- **Last Updated:** {gem['last_updated']}
+- **Owner:** {gem['owner']}
+- **Contributors:** {gem['contributor_count']}
+- **README Size:** {gem['readme_size']} bytes
+- **Has SKILL.md:** {gem['has_skill_md']}
+- **Is Fork:** {gem['is_fork']}
+
+## Bouncer Checklist
+- [ ] Static analysis passed
+- [ ] Reputation verified
+- [ ] No credential harvesting patterns
+- [ ] No unexpected network calls
+- [ ] Approved for evaluation
+"""
+              with open(filepath, "w") as f:
+                  f.write(content)
+
+              if skill:
+                  new_skills += 1
+              else:
+                  new_projects += 1
+              written_gems.append(gem)
+              print(f"  + [{gem['classification']}] {gem['full_name']} → {target_dir}")
+
+          # Step 5.2 — Update AGENT_NOTES.md
+          gem_names = [g["full_name"] for g in written_gems[:5]]
+          top_gem = written_gems[0] if written_gems else None
+          entry_num = len(re.findall(r"^## Entry \d+", notes_content if 'notes_content' in dir() else "", re.MULTILINE)) + 1
+
+          notes_entry = f"""
+## Entry {entry_num} — {TODAY} — Explorer — Deep exploration run
+
+**Session type:** Deep exploration
+**Files touched:** {'skills/discovered/ (' + str(new_skills) + ' new), ' if new_skills else ''}{'projects/discovered/ (' + str(new_projects) + ' new), ' if new_projects else ''}catalog/CHANGELOG.md, AGENT_NOTES.md
+**Time:** ~{len(investigated) * 3} min (estimated)
+
+**Key insight:**
+Explored {len(targets)} target{'s' if len(targets) != 1 else ''}: {'; '.join(targets[:3])}. Investigated {len(investigated)} candidates deeply, scored on 6 dimensions. {len(actionable_gems)} met the actionable threshold (score >= 40). {f'Top gem: {top_gem["full_name"]} (score: {top_gem["gem_score"]}).' if top_gem else 'No standout gems this run.'}
+
+**Suggestion for next agent:**
+{'Investigate ' + top_gem['full_name'] + ' further — it scored ' + str(top_gem['gem_score']) + '/100 and may warrant fast-tracking.' if top_gem and top_gem['gem_score'] >= 70 else 'Consider expanding search to adjacent domains or creating skills manually — the explored space may be saturated.'}
+
+**Open question:**
+{'Is ' + top_gem['full_name'] + ' production-ready enough for immediate integration, or does it need more vetting?' if top_gem else 'Are the current exploration targets aligned with owner priorities?'}
+
+**Tags:** #explorer #gem-hunt #deep-research
+**Confidence in suggestions:** {'high' if top_gem and top_gem['gem_score'] >= 70 else 'medium'}
+
+---
+"""
+          try:
+              with open("AGENT_NOTES.md", "a") as f:
+                  f.write(notes_entry)
+              print("  Updated AGENT_NOTES.md")
+          except Exception as e:
+              print(f"  ⚠ Could not update AGENT_NOTES.md: {e}")
+
+          # Step 5.3 — Update catalog
+          tools_catalog_path = "catalog/tools.json"
+          try:
+              with open(tools_catalog_path) as f:
+                  catalog = json.load(f)
+          except Exception:
+              catalog = {"version": "1.0.0", "tools": []}
+
+          for gem in written_gems:
+              catalog_entry = {
+                  "name": gem["name"],
+                  "full_name": gem["full_name"],
+                  "url": gem["url"],
+                  "description": gem["description"],
+                  "category": gem["category"],
+                  "stars": gem["stars"],
+                  "forks": gem["forks"],
+                  "language": gem["language"],
+                  "topics": gem["topics"],
+                  "last_updated": gem["last_updated"],
+                  "score": gem["gem_score"],
+                  "score_reasons": [
+                      f"Gem score: {gem['gem_score']}/100",
+                      f"Classification: {gem['classification']}",
+                      f"Action: {gem['action']}",
+                  ],
+                  "discovered_at": TODAY,
+                  "owner": gem["owner"],
+              }
+              catalog["tools"].append(catalog_entry)
+
+          catalog["last_updated"] = TODAY
+          catalog["total"] = len(catalog["tools"])
+          with open(tools_catalog_path, "w") as f:
+              json.dump(catalog, f, indent=2)
+          print(f"  Updated {tools_catalog_path}")
+
+          # Step 5.3b — Update changelog
+          total_written = new_skills + new_projects
+          if total_written > 0:
+              changelog_entry = f"\n## {TODAY} — Explorer Run\n"
+              changelog_entry += f"- Explored {len(targets)} target(s), investigated {len(investigated)} candidates\n"
+              changelog_entry += f"- Found {len(actionable_gems)} actionable gems\n"
+              if new_skills:
+                  changelog_entry += f"- Wrote {new_skills} skill discovery file(s)\n"
+              if new_projects:
+                  changelog_entry += f"- Wrote {new_projects} project discovery file(s)\n"
+              if top_gem:
+                  changelog_entry += f"- Top gem: {top_gem['full_name']} (score: {top_gem['gem_score']})\n"
+              changelog_entry += "\n"
+              with open("catalog/CHANGELOG.md", "a") as f:
+                  f.write(changelog_entry)
+              print("  Updated catalog/CHANGELOG.md")
+
+          print()
+          print(f"✅ Explorer complete: {new_skills} skills, {new_projects} projects written")
+          print(f"   Gems scored: {len(scored_gems)}, Actionable: {len(actionable_gems)}")
+          EXPLORER_SCRIPT
+
+      # ── Step 4: Commit any discoveries ──────────────────────────────────
+      - name: Commit exploration results
+        run: |
+          git config user.name "Explorer Agent"
+          git config user.email "explorer@versailles.bot"
+          git add skills/discovered/ projects/discovered/ catalog/ AGENT_NOTES.md
+          # Only commit if there are actual changes
+          if git diff --staged --quiet; then
+            echo "No new discoveries this exploration."
+          else
+            SKILL_COUNT=$(git diff --staged --name-only | grep "skills/discovered" | wc -l)
+            PROJECT_COUNT=$(git diff --staged --name-only | grep "projects/discovered" | wc -l)
+            git commit -m "explorer: found ${SKILL_COUNT} skill(s), ${PROJECT_COUNT} project(s) [$(date -u '+%Y-%m-%d %H:%M UTC')]"
+            git push
+            echo "Exploration results committed and pushed."
+          fi

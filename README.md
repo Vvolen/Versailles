@@ -5,6 +5,7 @@
 > You are the architect. Agents are the builders. Issues are the blueprints.
 
 [![Scout](https://github.com/Vvolen/Versailles/actions/workflows/scout.yml/badge.svg)](https://github.com/Vvolen/Versailles/actions/workflows/scout.yml)
+[![Explorer](https://github.com/Vvolen/Versailles/actions/workflows/explorer.yml/badge.svg)](https://github.com/Vvolen/Versailles/actions/workflows/explorer.yml)
 [![Bouncer](https://github.com/Vvolen/Versailles/actions/workflows/bouncer.yml/badge.svg)](https://github.com/Vvolen/Versailles/actions/workflows/bouncer.yml)
 [![Self-Heal](https://github.com/Vvolen/Versailles/actions/workflows/self-heal.yml/badge.svg)](https://github.com/Vvolen/Versailles/actions/workflows/self-heal.yml)
 
@@ -19,54 +20,56 @@ Versailles is an **autonomous orchestration layer** that continuously discovers,
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         VERSAILLES                                  │
-│                                                                     │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────────┐  │
-│  │  SCOUT   │───▶│ BOUNCER  │───▶│EVALUATOR │───▶│   EVOLVER    │  │
-│  │          │    │          │    │          │    │              │  │
-│  │ Discovers│    │ Security │    │  A/B     │    │  TDD loop    │  │
-│  │ tools on │    │ vets     │    │  tests   │    │  mutates &   │  │
-│  │ GitHub   │    │ skills   │    │  skills  │    │  improves    │  │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────────┘  │
-│       │               │               │                │           │
-│       ▼               ▼               ▼                ▼           │
-│  discovered/     quarantine/     evaluated/        evolved/        │
-│  (skills)        (skills)        (skills)          (skills)        │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                    SKILL PIPELINE (Agent Skills)            │   │
-│  │  discovered → quarantine → evaluated → evolved → archive   │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                 PROJECT PIPELINE (Open Source Tools)        │   │
-│  │  discovered → vetted → cataloged (no self-evolution)       │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│  ┌───────────────────┐    ┌──────────────────────────────────────┐ │
-│  │   RESEARCHER      │    │           SELF-HEALER                │ │
-│  │ Triggered by      │    │ Validates repo on every push:        │ │
-│  │ Issues → Finds    │    │ secrets, JSON, structure, skills     │ │
-│  │ deep knowledge    │    └──────────────────────────────────────┘ │
-│  └───────────────────┘                                             │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  HARNESS: CLAUDE.md + .mcp.json + agent-bootstrap.sh       │   │
-│  │  3-tier routing · swarm orchestration · context forking    │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│                           VERSAILLES                                  │
+│                                                                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
+│  │  SCOUT   │─▶│ BOUNCER  │─▶│EVALUATOR │─▶│ EVOLVER  │  │EXPLORER│ │
+│  │ Wide net │  │Zero-trust│  │  A/B     │  │TDD loop  │  │Gem     │ │
+│  │ every 6h │  │ security │  │  tests   │  │ mutates  │  │hunter  │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  └────────┘ │
+│       │              │             │              │            │      │
+│       ▼              ▼             ▼              ▼            │      │
+│  discovered/    quarantine/   evaluated/     evolved/          │      │
+│                                                                │      │
+│  ┌─────────────────────────────────────────────────────────────┘      │
+│  │  Explorer feeds high-value gems into both pipelines:              │
+│  │  skills/discovered/ (agent skills) + projects/discovered/ (tools) │
+│  └───────────────────────────────────────────────────────────────┘    │
+│                                                                       │
+│  ┌────────────────────────────────────────────────────────────────┐   │
+│  │                 SKILL PIPELINE (Agent Skills)                  │   │
+│  │  discovered → quarantine → evaluated → evolved → archive      │   │
+│  └────────────────────────────────────────────────────────────────┘   │
+│  ┌────────────────────────────────────────────────────────────────┐   │
+│  │              PROJECT PIPELINE (Open Source Tools)              │   │
+│  │  discovered → vetted → cataloged (no self-evolution)          │   │
+│  └────────────────────────────────────────────────────────────────┘   │
+│                                                                       │
+│  ┌───────────────────┐  ┌────────────────────────────────────────┐   │
+│  │   RESEARCHER      │  │            SELF-HEALER                 │   │
+│  │ Issue-triggered   │  │ Validates repo on every push:          │   │
+│  │ deep knowledge    │  │ secrets, JSON, structure, skills       │   │
+│  └───────────────────┘  └────────────────────────────────────────┘   │
+│                                                                       │
+│  ┌────────────────────────────────────────────────────────────────┐   │
+│  │  HARNESS: CLAUDE.md + .mcp.json + agent-bootstrap.sh          │   │
+│  │  3-tier routing · swarm orchestration · context forking       │   │
+│  └────────────────────────────────────────────────────────────────┘   │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## The Four Agents
+## The Five Agents
 
 | Agent | Schedule | What It Does |
 |-------|----------|-------------|
-| 🔭 **Scout** | Every 6 hours | Searches GitHub for MCP servers, Claude skills, AI agents, plugins. Scores each on 5 dimensions. |
+| 🔭 **Scout** | Every 6 hours | Searches GitHub for MCP servers, Claude skills, AI agents, plugins. Scores each on 5 dimensions. Routes skills vs projects automatically. |
+| 🧭 **Explorer** | Weekly + on-demand | Deep strategic exploration — the gem hunter. Goes beyond star counts to read code, verify claims, and find phase-change discoveries. Scores on 6 dimensions. |
 | 🛡️ **Bouncer** | On every discovery | Zero-trust security vetting. 37% of published AI skills are malicious. Bouncer catches them. |
 | 🧪 **Evaluator** | On vetted skills | Blind A/B tests against raw Claude baseline. Promotes skills that beat the benchmark by 15%+. |
-| �� **Evolver** | Daily | TDD mutation loop. Generates test scenarios, mutates skill instructions, keeps improvements. |
+| 🧬 **Evolver** | Daily | TDD mutation loop. Generates test scenarios, mutates skill instructions, keeps improvements. |
 
 Plus:
 - 🔬 **Researcher** — Triggered by Issues labeled `research-request`. Recursively deepens knowledge on a topic.
@@ -109,12 +112,13 @@ Versailles/
 ├── .github/
 │   ├── copilot-instructions.md  # Instructions for Copilot coding agent
 │   ├── ISSUE_TEMPLATE/          # Structured issue templates
-│   └── workflows/               # All 6 GitHub Actions workflows
+│   └── workflows/               # All 7 GitHub Actions workflows
 ├── agents/                      # Agent identity and methodology files
 │   ├── scout/                   # SOUL.md + CRITERIA.md
 │   ├── bouncer/                 # SOUL.md + SECURITY_CHECKS.md
 │   ├── evaluator/               # SOUL.md + EVAL_FRAMEWORK.md
-│   └── evolver/                 # SOUL.md + EVOLUTION_RULES.md
+│   ├── evolver/                 # SOUL.md + EVOLUTION_RULES.md
+│   └── explorer/                # SOUL.md + EXPLORATION_METHODOLOGY.md
 ├── skills/                      # AGENT SKILLS (SKILL.md format, self-evolving)
 │   ├── discovered/              # Raw skill drafts (pre-security)
 │   ├── quarantine/              # Under security review

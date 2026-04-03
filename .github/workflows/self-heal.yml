@@ -135,6 +135,7 @@ jobs:
               "agents/bouncer",
               "agents/evaluator",
               "agents/evolver",
+              "agents/explorer",
               "harness",
               "docs",
           ]
@@ -152,6 +153,8 @@ jobs:
               "agents/bouncer/SOUL.md",
               "agents/evaluator/SOUL.md",
               "agents/evolver/SOUL.md",
+              "agents/explorer/SOUL.md",
+              "agents/explorer/EXPLORATION_METHODOLOGY.md",
           ]
 
           issues = []

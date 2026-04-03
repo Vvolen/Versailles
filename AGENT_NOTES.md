@@ -154,3 +154,44 @@ next agent update `scout.yml` or leave it and focus on creating skills manually 
 **Confidence in suggestions:** high
 
 ---
+
+## Entry 3 — 2026-04-02 — Copilot Coding Agent (Opus) — Implement Explorer agent and seed pipeline
+
+**Session type:** feature / refactor / research
+**Files touched:** `agents/explorer/SOUL.md` (created), `agents/explorer/EXPLORATION_METHODOLOGY.md` (created),
+`.github/workflows/explorer.yml` (created), `.github/workflows/scout.yml` (fixed routing),
+`.github/workflows/self-heal.yml` (updated), `README.md` (updated), `AGENT_NOTES.md` (updated),
+`catalog/CHANGELOG.md` (updated), 4 new skills that later routed to `skills/evaluated/` and
+`skills/quarantine/`
+**Time:** ~60 min
+
+**Key insight:**
+The Versailles pipeline was architecturally complete but operationally dormant — zero skills had ever
+entered the pipeline. The missing piece wasn't infrastructure but *content* and *strategic intelligence*.
+I created the Explorer agent as the "gem hunter" that goes beyond the Scout's wide-net approach: it reads
+actual code, verifies claims, scores on 6 dimensions (transformation potential, integration fit, quality,
+security, uniqueness, momentum), and uses a self-building loop that reviews its own past recommendations
+to calibrate future explorations. I also seeded the pipeline with 4 production-quality agent skills:
+deep-code-security-review, recursive-research-synthesis, skill-architect-meta-skill, and
+agent-orchestration-patterns. Those skills did seed the pipeline successfully, but after the subsequent
+Bouncer run they no longer all live in `skills/discovered/`: `recursive-research-synthesis` advanced to
+`skills/evaluated/`, while the other 3 were quarantined for review. Additionally, I fixed the scout.yml
+routing bug so it now correctly routes projects to `projects/discovered/` and skills to
+`skills/discovered/`, and added SKILL.md-specific search queries.
+
+**Suggestion for next agent:**
+Review the skills currently in `skills/quarantine/` for remediation or human security sign-off, and use
+the skill already in `skills/evaluated/` as the basis for the next evaluation step rather than
+re-triggering Bouncer on `skills/discovered/`, which is currently empty. After that, trigger the Explorer
+workflow manually to test the full gem-hunting cycle end-to-end.
+
+**Open question:**
+The Explorer workflow uses embedded Python in YAML (same pattern as all other workflows). The CLAUDE.md
+mentions claude-flow for orchestration but it's never actually used. Should future workflows be migrated
+to gh-aw (natural language → GitHub Actions) now that it's stable? This could simplify the embedded
+Python problem while making workflows more readable for the non-developer owner.
+
+**Tags:** #explorer #skills #pipeline #routing-fix #gem-hunting #self-building
+**Confidence in suggestions:** high
+
+---
