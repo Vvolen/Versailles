@@ -67,12 +67,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate inputs
+        env:
+          INPUT_PROMPT: ${{ github.event.inputs.prompt }}
         run: |
-          if [ -z "${{ github.event.inputs.prompt }}" ]; then
+          if [ -z "$INPUT_PROMPT" ]; then
             echo "❌ ERROR: prompt input is required"
             exit 1
           fi
-          PROMPT_LEN=$(echo -n "${{ github.event.inputs.prompt }}" | wc -c)
+          PROMPT_LEN=$(printf '%s' "$INPUT_PROMPT" | wc -c)
           if [ "$PROMPT_LEN" -lt 10 ]; then
             echo "❌ ERROR: prompt is too short (min 10 characters)"
             exit 1
@@ -295,9 +297,11 @@ jobs:
 
       - name: Commit artifacts to branch
         if: github.event.inputs.commit_to_branch == 'true'
+        env:
+          INPUT_PROMPT: ${{ github.event.inputs.prompt }}
         run: |
           # Create a slug from the prompt (first 40 chars, lowercase, dashes)
-          PROMPT_SLUG=$(echo "${{ github.event.inputs.prompt }}" | \
+          PROMPT_SLUG=$(echo "$INPUT_PROMPT" | \
             tr '[:upper:]' '[:lower:]' | \
             tr -cs 'a-z0-9' '-' | \
             cut -c1-40 | \
@@ -320,7 +324,10 @@ jobs:
                   "research/findings/task-plan-${DATE}.md" \
                   "research/findings/test-plan-${DATE}.md"
 
-          git commit -m "plan: generate spec/task/test for '$(echo "${{ github.event.inputs.prompt }}" | head -c 60)'"
+          # Write commit message to a file to avoid shell injection on prompt content
+          printf 'plan: generate spec/task/test for %s\n' \
+            "$(printf '%s' "$INPUT_PROMPT" | head -c 60)" > /tmp/commit_msg.txt
+          git commit -F /tmp/commit_msg.txt
 
           git push origin "$BRANCH"
 
@@ -333,29 +340,34 @@ jobs:
         if: github.event.inputs.open_issue == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_PROMPT: ${{ github.event.inputs.prompt }}
+          INPUT_DEPTH: ${{ github.event.inputs.depth }}
         run: |
           SPEC_PREVIEW=$(head -50 tmp/plan-output/spec.md 2>/dev/null || echo "*(spec not available)*")
           TASK_COUNT=$(grep -c "^## Task" tmp/plan-output/task_plan.md 2>/dev/null || echo "?")
 
+          # Truncate title to ~80 chars to stay within GitHub limits
+          ISSUE_TITLE="Plan: $(printf '%s' "$INPUT_PROMPT" | head -c 77)"
+
+          # Write issue body to a temp file to avoid shell injection and indentation issues
+          {
+            printf '## Agentic Planner Output\n\n'
+            printf '**Prompt:** %s\n' "$INPUT_PROMPT"
+            printf '**Generated:** %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
+            printf '**Depth:** %s\n' "$INPUT_DEPTH"
+            printf '**Tasks:** %s\n\n' "${TASK_COUNT}"
+            printf '## Spec Preview\n\n'
+            printf '%s\n\n' "${SPEC_PREVIEW}"
+            printf -- '---\n\n'
+            printf '**Full artifacts:** Download from [Actions → Run #%s](%s/%s/actions/runs/%s)\n\n' \
+              "${{ github.run_number }}" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}"
+            printf '> ⚠️ Review all artifacts before assigning to a coding agent. Do not auto-merge.\n'
+          } > /tmp/issue_body.md
+
           gh issue create \
-            --title "Plan: ${{ github.event.inputs.prompt }}" \
-            --body "## Agentic Planner Output
-
-          **Prompt:** ${{ github.event.inputs.prompt }}
-          **Generated:** $(date -u '+%Y-%m-%d %H:%M UTC')
-          **Depth:** ${{ github.event.inputs.depth }}
-          **Tasks:** ${TASK_COUNT}
-
-          ## Spec Preview
-
-          ${SPEC_PREVIEW}
-
-          ---
-
-          **Full artifacts:** Download from [Actions → Run #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-          > ⚠️ Review all artifacts before assigning to a coding agent. Do not auto-merge.
-          " || echo "⚠️  Issue creation failed (may require additional permissions)"
+            --title "$ISSUE_TITLE" \
+            --body-file /tmp/issue_body.md \
+            || echo "⚠️  Issue creation failed (may require additional permissions)"
 
       - name: Summary
         run: |
