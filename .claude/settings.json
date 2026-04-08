@@ -1,0 +1,47 @@
+{
+  "projectName": "Versailles",
+  "projectDescription": "Autonomous skill discovery and evolution engine. Scouts GitHub for AI skills, vets them through a zero-trust bouncer, A/B tests against Claude baseline, and evolves winners via TDD mutation.",
+  "constitutionFile": "CLAUDE.md",
+  "context": {
+    "alwaysLoad": ["CLAUDE.md"],
+    "onRequest": [
+      "AGENT_NOTES.md",
+      "docs/ARCHITECTURE.md",
+      "docs/STATE_AND_DELTAS.md",
+      "catalog/CHANGELOG.md"
+    ],
+    "coldStartChecklist": "CLAUDE.md#0-cold-start-checklist"
+  },
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN:-${GITHUB_TOKEN}}"
+      }
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    }
+  },
+  "modelTierRouting": {
+    "note": "See CLAUDE.md §2 for full routing rules.",
+    "tier1_fast": "claude-haiku — validation, JSON checks, catalog updates",
+    "tier2_balanced": "claude-sonnet — security analysis, skill scoring, research synthesis",
+    "tier3_powerful": "claude-opus — deep research, swarm coordination, novel skill synthesis"
+  },
+  "permissions": {
+    "allowedTools": ["filesystem", "github", "sequential-thinking"],
+    "disallowedActions": [
+      "auto-merge any PR",
+      "delete skills (archive instead)",
+      "skip bouncer stage",
+      "commit secrets or API keys"
+    ]
+  }
+}

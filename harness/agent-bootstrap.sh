@@ -130,18 +130,38 @@ else
     echo "  ⚠️  GitHub CLI not found (required for PR creation in research workflow)"
 fi
 
-# ── Step 5: Check claude-flow (optional) ─────────────────────────────────
+# ── Step 5: Check Ruflo / claude-flow (optional) ─────────────────────────
 echo ""
-echo "🤖 Step 5: Checking claude-flow..."
+echo "🤖 Step 5: Checking Ruflo (swarm orchestration)..."
 
-if command -v claude-flow &>/dev/null; then
-    CF_VERSION=$(claude-flow --version 2>/dev/null || echo "version unknown")
-    echo "  ✅ claude-flow: $CF_VERSION"
+# Ruflo ships as 'ruflo' binary (formerly 'claude-flow'). Both aliases work.
+RUFLO_BIN=""
+RUFLO_VERSION=""
+if command -v ruflo &>/dev/null; then
+    RUFLO_BIN="ruflo"
+    RUFLO_VERSION=$(ruflo --version 2>/dev/null || echo "version unknown")
+elif command -v claude-flow &>/dev/null; then
+    RUFLO_BIN="claude-flow"
+    RUFLO_VERSION=$(claude-flow --version 2>/dev/null || echo "version unknown")
+fi
+
+if [ -n "$RUFLO_BIN" ]; then
+    echo "  ✅ Ruflo ($RUFLO_BIN): $RUFLO_VERSION"
+    echo ""
+    echo "  📋 2-worker + orchestrator swarm:"
+    echo "     $RUFLO_BIN swarm start \\"
+    echo "       --orchestrator claude-sonnet \\"
+    echo "       --workers 2 \\"
+    echo "       --task \"your task\" \\"
+    echo "       --context CLAUDE.md \\"
+    echo "       --max-agents 5"
 elif command -v npx &>/dev/null; then
-    echo "  ℹ️  claude-flow not installed globally, but npx available"
-    echo "     Run: npm install -g @claude-flow/cli@latest"
+    echo "  ℹ️  Ruflo not installed globally, but npx is available."
+    echo "     Install: npm install -g @claude-flow/cli@latest"
+    echo "     Or run:  npx @claude-flow/cli@latest swarm start --workers 2"
 else
-    echo "  ⚠️  claude-flow not available (required for swarm orchestration)"
+    echo "  ⚠️  Ruflo not available (required for swarm orchestration)"
+    echo "     Install Node.js first, then: npm install -g @claude-flow/cli@latest"
 fi
 
 # ── Step 6: Load role-specific configuration ──────────────────────────────

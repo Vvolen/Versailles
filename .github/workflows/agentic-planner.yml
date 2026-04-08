@@ -1,0 +1,389 @@
+name: Agentic Planner — Spec & Task Generation
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Agentic Planner Workflow
+#
+# PURPOSE: Given a plain-language description of what you want to build, this
+# workflow produces three planning artifacts using Claude:
+#   - spec.md        — Unambiguous senior-developer specification
+#   - task_plan.md   — Atomic implementation tasks with acceptance criteria
+#   - test_plan.md   — TDD test cases (what must be true for each task)
+#
+# HOW TO USE:
+#   1. Go to Actions → "Agentic Planner" → Run workflow
+#   2. Enter your prompt in the "What to build" field
+#   3. Wait ~60-120 seconds for the artifacts to generate
+#   4. Download the artifacts (spec.md, task_plan.md, test_plan.md)
+#   5. Review and approve before handing to a coding agent
+#
+# SAFETY: This workflow does NOT auto-merge, auto-commit code, or take
+# destructive actions. It only generates planning documents.
+# A human must review and act on the outputs.
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "What do you want to build? (describe in plain language)"
+        required: true
+        type: string
+      depth:
+        description: "Spec depth"
+        required: false
+        default: "detailed"
+        type: choice
+        options:
+          - quick        # Shorter outputs, faster (~30s) — good for small tasks
+          - detailed     # Full senior-developer spec (~90s) — recommended
+      commit_to_branch:
+        description: "Commit artifacts to a plan/ branch? (creates branch, does NOT open PR)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      open_issue:
+        description: "Open a GitHub Issue with the spec summary? (requires GITHUB_TOKEN)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+jobs:
+  plan:
+    name: Generate Planning Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate inputs
+        env:
+          INPUT_PROMPT: ${{ github.event.inputs.prompt }}
+        run: |
+          if [ -z "$INPUT_PROMPT" ]; then
+            echo "❌ ERROR: prompt input is required"
+            exit 1
+          fi
+          PROMPT_LEN=$(printf '%s' "$INPUT_PROMPT" | wc -c)
+          if [ "$PROMPT_LEN" -lt 10 ]; then
+            echo "❌ ERROR: prompt is too short (min 10 characters)"
+            exit 1
+          fi
+          echo "✅ Input validated (${PROMPT_LEN} chars)"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install anthropic==0.25.0 --quiet
+
+      - name: Read harness context
+        id: context
+        run: |
+          # Load a condensed harness context for the planner
+          CONTEXT=""
+          if [ -f "CLAUDE.md" ]; then
+            # Take the first 100 lines of the constitution for context
+            CONTEXT=$(head -100 CLAUDE.md)
+          fi
+          # Escape for multiline env var
+          echo "HARNESS_CONTEXT<<HARNESS_EOF" >> "$GITHUB_ENV"
+          echo "$CONTEXT" >> "$GITHUB_ENV"
+          echo "HARNESS_EOF" >> "$GITHUB_ENV"
+          echo "✅ Harness context loaded ($(echo "$CONTEXT" | wc -l) lines)"
+
+      - name: Generate planning artifacts
+        id: generate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BUILD_PROMPT: ${{ github.event.inputs.prompt }}
+          DEPTH: ${{ github.event.inputs.depth }}
+        run: |
+          python3 << 'PYTHON_EOF'
+          import os
+          import json
+          import sys
+          import anthropic
+
+          api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+          if not api_key:
+              print("❌ ERROR: ANTHROPIC_API_KEY secret is not set.")
+              print("   Go to: Settings → Secrets and variables → Actions → New repository secret")
+              print("   Add: ANTHROPIC_API_KEY = your Anthropic API key")
+              sys.exit(1)
+
+          client = anthropic.Anthropic(api_key=api_key)
+          prompt = os.environ["BUILD_PROMPT"]
+          depth = os.environ.get("DEPTH", "detailed")
+
+          # Read harness context (already loaded into env)
+          harness_context = os.environ.get("HARNESS_CONTEXT", "")
+
+          is_quick = depth == "quick"
+
+          # ── System prompt ──────────────────────────────────────────────────
+          system_prompt = f"""You are a senior software architect and technical specification writer.
+          You are working inside the Versailles repository, an autonomous skill discovery and evolution engine.
+
+          Repository context (abridged):
+          {harness_context[:3000]}
+
+          Your job is to produce three planning documents that leave NO room for ambiguity.
+          A coding agent reading these documents should be able to implement the feature
+          without asking any clarifying questions.
+
+          Output format: Return a JSON object with exactly three keys:
+          - "spec": Full markdown specification document
+          - "task_plan": Markdown task breakdown document
+          - "test_plan": Markdown TDD test plan document
+
+          Respond with ONLY the JSON object. No preamble, no explanation."""
+
+          # ── Spec prompt ────────────────────────────────────────────────────
+          spec_instructions = """
+          Generate spec.md — a senior-developer specification.
+
+          Include ALL of the following sections:
+          1. **Overview** — What this feature does and why it matters (2-3 sentences)
+          2. **Scope** — Exactly what IS and IS NOT included in this implementation
+          3. **Acceptance Criteria** — Numbered list of measurable, binary criteria (pass/fail)
+          4. **Technical Requirements** — Languages, libraries, APIs, data formats, constraints
+          5. **File Changes** — Every file to create, modify, or delete (with path and purpose)
+          6. **Data Contracts** — Input/output schemas, API shapes, file formats
+          7. **Error Handling** — How each failure mode is handled
+          8. **Security Considerations** — Any auth, input validation, secrets handling required
+          9. **Open Questions** — Any decisions that require human input before coding starts
+          """ if not is_quick else """
+          Generate spec.md — a concise specification.
+          Include: Overview, Scope, Acceptance Criteria, File Changes.
+          """
+
+          task_instructions = """
+          Generate task_plan.md — atomic implementation tasks.
+
+          Rules:
+          - Each task must be completable in <2 hours by a single developer
+          - Each task must have a clear, binary "done" condition
+          - Tasks must be ordered (earlier tasks must not depend on later ones)
+          - Format each task as: ## Task N: [Title] with sub-sections: Goal, Steps, Done When, Dependencies
+          - Include a "Verification" task at the end that confirms all acceptance criteria pass
+          """ if not is_quick else """
+          Generate task_plan.md — numbered list of atomic tasks.
+          Each task: title + done-when condition. Max 10 tasks.
+          """
+
+          test_instructions = """
+          Generate test_plan.md — TDD test cases.
+
+          For each acceptance criterion in the spec, write:
+          - Test name (snake_case)
+          - What state/input to set up
+          - What action to take
+          - What outcome to assert
+          - Whether it's a unit test, integration test, or E2E test
+
+          Also include:
+          - Edge cases (empty inputs, large inputs, malformed data)
+          - Security test cases (injection, unauthorized access)
+          - A "happy path" end-to-end test
+
+          Format as markdown with code blocks showing test pseudocode.
+          """ if not is_quick else """
+          Generate test_plan.md — key test cases for the spec.
+          Include: happy path, main edge cases, and one security test.
+          """
+
+          # ── Full user message ──────────────────────────────────────────────
+          user_message = f"""Build request: {prompt}
+
+          Generate all three planning documents now.
+
+          {spec_instructions}
+
+          {task_instructions}
+
+          {test_instructions}
+
+          Remember: Output ONLY valid JSON with keys "spec", "task_plan", "test_plan".
+          Each value is a complete markdown string."""
+
+          model = "claude-opus-4-5" if not is_quick else "claude-haiku-4-5"
+          max_tokens = 8000 if not is_quick else 3000
+
+          print(f"🤖 Generating planning artifacts (model: {model}, depth: {depth})...")
+          print(f"📝 Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
+
+          response = client.messages.create(
+              model=model,
+              max_tokens=max_tokens,
+              system=system_prompt,
+              messages=[{"role": "user", "content": user_message}]
+          )
+
+          raw_content = response.content[0].text.strip()
+
+          # Parse JSON response
+          # Strip markdown code fences if present
+          if raw_content.startswith("```"):
+              lines = raw_content.split("\n")
+              raw_content = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
+
+          try:
+              artifacts = json.loads(raw_content)
+          except json.JSONDecodeError as e:
+              print(f"⚠️  JSON parse failed: {e}")
+              print("Attempting to extract content directly...")
+              # Fallback: write raw content as spec
+              artifacts = {
+                  "spec": f"# Spec\n\n{raw_content}",
+                  "task_plan": "# Task Plan\n\n*Generation failed — see spec.md for raw output.*",
+                  "test_plan": "# Test Plan\n\n*Generation failed — see spec.md for raw output.*"
+              }
+
+          # Write artifacts
+          os.makedirs("tmp/plan-output", exist_ok=True)
+
+          for filename, content in [
+              ("spec.md", artifacts.get("spec", "")),
+              ("task_plan.md", artifacts.get("task_plan", "")),
+              ("test_plan.md", artifacts.get("test_plan", ""))
+          ]:
+              if not content:
+                  content = f"# {filename}\n\n*No content generated.*"
+              filepath = f"tmp/plan-output/{filename}"
+              with open(filepath, "w") as f:
+                  f.write(content)
+              line_count = content.count("\n")
+              print(f"  ✅ {filename} ({line_count} lines)")
+
+          # Write metadata
+          import datetime
+          metadata = {
+              "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+              "prompt": prompt,
+              "depth": depth,
+              "model": model,
+              "workflow_run_id": os.environ.get("GITHUB_RUN_ID", "unknown"),
+              "input_tokens": response.usage.input_tokens,
+              "output_tokens": response.usage.output_tokens
+          }
+          with open("tmp/plan-output/metadata.json", "w") as f:
+              json.dump(metadata, f, indent=2)
+
+          print(f"\n✅ Generation complete")
+          print(f"   Input tokens:  {response.usage.input_tokens}")
+          print(f"   Output tokens: {response.usage.output_tokens}")
+
+          PYTHON_EOF
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: planning-artifacts-${{ github.run_number }}
+          path: tmp/plan-output/
+          retention-days: 30
+
+      - name: Commit artifacts to branch
+        if: github.event.inputs.commit_to_branch == 'true'
+        env:
+          INPUT_PROMPT: ${{ github.event.inputs.prompt }}
+        run: |
+          # Create a slug from the prompt (first 40 chars, lowercase, dashes)
+          PROMPT_SLUG=$(echo "$INPUT_PROMPT" | \
+            tr '[:upper:]' '[:lower:]' | \
+            tr -cs 'a-z0-9' '-' | \
+            cut -c1-40 | \
+            sed 's/-*$//')
+          DATE=$(date -u '+%Y-%m-%d')
+          BRANCH="plan/${DATE}-${PROMPT_SLUG}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+
+          # Copy artifacts to a tracked directory
+          mkdir -p "research/findings"
+          cp tmp/plan-output/spec.md "research/findings/spec-${DATE}.md"
+          cp tmp/plan-output/task_plan.md "research/findings/task-plan-${DATE}.md"
+          cp tmp/plan-output/test_plan.md "research/findings/test-plan-${DATE}.md"
+
+          git add "research/findings/spec-${DATE}.md" \
+                  "research/findings/task-plan-${DATE}.md" \
+                  "research/findings/test-plan-${DATE}.md"
+
+          # Write commit message to a file to avoid shell injection on prompt content
+          printf 'plan: generate spec/task/test for %s\n' \
+            "$(printf '%s' "$INPUT_PROMPT" | head -c 60)" > /tmp/commit_msg.txt
+          git commit -F /tmp/commit_msg.txt
+
+          git push origin "$BRANCH"
+
+          echo ""
+          echo "✅ Artifacts committed to branch: $BRANCH"
+          echo "   Review the branch before creating a PR:"
+          echo "   https://github.com/${{ github.repository }}/compare/${BRANCH}"
+
+      - name: Open GitHub Issue
+        if: github.event.inputs.open_issue == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_PROMPT: ${{ github.event.inputs.prompt }}
+          INPUT_DEPTH: ${{ github.event.inputs.depth }}
+        run: |
+          SPEC_PREVIEW=$(head -50 tmp/plan-output/spec.md 2>/dev/null || echo "*(spec not available)*")
+          TASK_COUNT=$(grep -c "^## Task" tmp/plan-output/task_plan.md 2>/dev/null || echo "?")
+
+          # Truncate title to ~80 chars to stay within GitHub limits
+          ISSUE_TITLE="Plan: $(printf '%s' "$INPUT_PROMPT" | head -c 77)"
+
+          # Write issue body to a temp file to avoid shell injection and indentation issues
+          {
+            printf '## Agentic Planner Output\n\n'
+            printf '**Prompt:** %s\n' "$INPUT_PROMPT"
+            printf '**Generated:** %s\n' "$(date -u '+%Y-%m-%d %H:%M UTC')"
+            printf '**Depth:** %s\n' "$INPUT_DEPTH"
+            printf '**Tasks:** %s\n\n' "${TASK_COUNT}"
+            printf '## Spec Preview\n\n'
+            printf '%s\n\n' "${SPEC_PREVIEW}"
+            printf -- '---\n\n'
+            printf '**Full artifacts:** Download from [Actions → Run #%s](%s/%s/actions/runs/%s)\n\n' \
+              "${{ github.run_number }}" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}"
+            printf '> ⚠️ Review all artifacts before assigning to a coding agent. Do not auto-merge.\n'
+          } > /tmp/issue_body.md
+
+          gh issue create \
+            --title "$ISSUE_TITLE" \
+            --body-file /tmp/issue_body.md \
+            || echo "⚠️  Issue creation failed (may require additional permissions)"
+
+      - name: Summary
+        run: |
+          echo "## 🏰 Agentic Planner Complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Prompt:** ${{ github.event.inputs.prompt }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Depth:** ${{ github.event.inputs.depth }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Artifacts Generated" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| File | Purpose |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|---------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`spec.md\` | Unambiguous senior-developer specification |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`task_plan.md\` | Atomic implementation tasks with done conditions |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`test_plan.md\` | TDD test cases for every acceptance criterion |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Download:** [planning-artifacts-${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> ⚠️ **Human review required** before handing artifacts to a coding agent. Do not auto-merge." >> "$GITHUB_STEP_SUMMARY"

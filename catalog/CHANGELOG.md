@@ -74,3 +74,15 @@
 - ❌ `deep-code-security-review-2026-04-02-quarantine.md` quarantined (score: 0) — human review required
 - ✅ `recursive-research-synthesis-2026-04-02-v1.md` passed bouncer (score: 50)
 - ❌ `agent-orchestration-patterns-2026-04-02-quarantine.md` quarantined (score: 20) — human review required
+
+---
+
+## 2026-04-03 — Harness Environment Standardization (Agent Session)
+
+- 📁 Created `.claude/settings.json` — Claude Code / agent runtime project configuration (MCP servers, tier routing, permissions)
+- 📁 Created `.claude/context.md` — Compact project context for agent cold-starts (~600 tokens)
+- 🔧 Updated `.devcontainer/devcontainer.json` — Ruflo version health-check in postCreateCommand; swarm command hint in postStartCommand
+- 🔧 Updated `harness/agent-bootstrap.sh` — Step 5 now detects `ruflo` binary (with `claude-flow` fallback); prints 2-worker + orchestrator swarm command
+- 📄 Created `docs/STATE_AND_DELTAS.md` — State/delta document: current pipeline status, 2-week changelog, gap analysis, repo-connection guide, Ruflo swarm patterns
+- ⚡ Created `.github/workflows/agentic-planner.yml` — workflow_dispatch: prompt → spec.md + task_plan.md + test_plan.md as artifacts; optional branch commit and issue creation; no auto-merge
+- 📝 Updated `AGENT_NOTES.md` — Entry 4 with session insights and handoff notes
