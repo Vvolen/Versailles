@@ -65,7 +65,7 @@ jobs:
 
           # Files to skip (binary, git objects, known safe files)
           SKIP_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.zip', '.gz'}
-          SKIP_DIRS = {'.git', 'node_modules', '__pycache__', '.venv'}
+          SKIP_DIRS = {'.git', 'node_modules', '__pycache__', '.venv', 'quarantine'}
           SKIP_FILES = {'CHANGELOG.md'}  # May contain example tokens in docs
 
           issues_found = []

@@ -36,7 +36,7 @@ Versailles is an **autonomous skill discovery and evolution engine** built entir
 | `projects/discovered/` | 3 | `anthropic-cookbook-*`, `gh-aw-*`, `mcp-servers-official-*` |
 | `projects/vetted/` | 0 | (Bouncer has not been run on projects track yet) |
 
-### Active Workflows (7 total)
+### Active Workflows (8 total)
 
 | Workflow | Schedule | Last Status |
 |----------|----------|-------------|
@@ -47,6 +47,7 @@ Versailles is an **autonomous skill discovery and evolution engine** built entir
 | `evolve.yml` | Daily 2 AM | ⚠️ Nothing to evolve yet (no evolved/ skills) |
 | `research.yml` | Issue label: research-request | ✅ Functional |
 | `self-heal.yml` | Every push | ✅ Running — validates repo integrity |
+| `agentic-planner.yml` | Manual (workflow_dispatch) | ✅ Added 2026-04-03 — spec/task/test generation |
 
 ### Catalog
 
