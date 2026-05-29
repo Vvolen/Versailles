@@ -1,0 +1,446 @@
+Choosing the right agent orchestration layer
+
+
+
+Saved as chat
+Share your thoughts
+I’m sharing this because the landscape of agent frameworks has matured rapidly, and choosing the right one early on can save you months of work and architectural debt.
+Agents aren’t just models talking to APIs anymore — they’re orchestration runtimes, memory managers, and observability platforms that define how your AI workflows actually behave in production.
+
+
+
+6
+Here’s what matters most right now:
+Core philosophies
+	•	OpenAI Agents SDK: opinionated, handoff-first model where agents explicitly pass tasks to each other. Includes tracing and guardrails out of the box — great if you’re committed to the OpenAI stack and want observability built in. 
+	•	LangGraph (LangChain-based): graph modeling of workflows where each node is a step and edges control transitions. Excellent for complex, branching workflows with rich state and checkpointing. 
+	•	CrewAI: role‑based crews that focus on quick prototyping and simpler orchestration; lower learning curve but you trade off some built‑in state and trace tooling. 
+	•	AutoGen / AG2: conversation‑style multi‑agent coordination — agents speak in a chat and selectors moderate turns; flexible but can be more ad‑hoc compared to graph or handoff models. 
+Tradeoffs that actually affect production
+	•	Multi‑vendor models: LangGraph, CrewAI, and AutoGen are model‑agnostic and let you mix providers per agent. OpenAI Agents SDK ties you to OpenAI models (though MCP adoption is shifting tooling standards). 
+	•	Tool access & integration: Consider whether you need universal tool standards like the Model Context Protocol (MCP) — frameworks differ in native support, which affects how easily you plug in databases, APIs, or custom services. 
+	•	Observability & tracing: Built‑in tracing (contextual timeline of agent actions) is a huge productivity boost for debugging and compliance — especially in LangGraph and OpenAI Agents SDK. 
+	•	State & memory: If long‑running, check‑pointed workflows matter (e.g., “time travel” debugging, pausing and resuming), LangGraph shines; simpler session state is typical for CrewAI/AutoGen. 
+How to prototype first
+	•	Go for CrewAI if you want something up and running with minimal ceremony — roll out simple multi‑agent workflows quickly.
+	•	Pick OpenAI Agents SDK if you’re already deep in the OpenAI ecosystem and want clarity on handoffs + built‑in observability.
+	•	Choose LangGraph when you know your logic will branch a lot and you need strict state control before scaling.
+Mapping a Supabase memory layer into an agent graph
+	•	Treat Supabase as your external memory store and expose it via tool functions that agents call.
+	•	In graph‑centric frameworks like LangGraph, each node can fetch or update memory via defined tool calls, letting you tie database state into transitions rather than just chat context.
+	•	With role/crew‑based frameworks, encode memory access as part of each agent’s task specification so that these database interactions happen predictably.
+In short: this isn’t just about “which SDK to pick” — it’s about choosing an orchestration model that matches your complexity, your multi‑vendor needs, and your operational expectations before you build your system on top of it.
+
+
+
+
+
+
+Nick's Agent Architecture — Master Map.md
+File
+
+
+
+
+
+validation_framework(2).md
+File
+
+
+
+
+
+Full stack Solana knowledge (1).txt
+Document
+
+
+
+
+
+Wallet tracking(1).txt
+Document
+
+
+
+
+
+polymarket_masterplan_html.md
+File
+
+
+
+
+
+Building Mastra with AI..txt
+Document
+
+
+
+
+
+Mastra overview.txt
+Document
+
+
+What about Mastra? And they work with a memory layer called Cognee - Although the memory obviously is dependent on multiple different things. Check this out. I have these two docs that explain quite a bit about Mastra. Here, check it out. So, I just gave you two attachments that I got straight from Monstra's docs. One of them is really big, I apologize, lol. But it'll show you, like, how Monstra works. And then, um, I wanted to show you, like, my, like, like, and this isn't all that I have, like, by any means. This is probably, like, a tenth of it, if that, literally. But the Polymarket Master Plan is a pretty good idea of, like, where we're at, but, like, well, I have more than that for sure, but that's not a bad, like, look at it. But the wallet tracking, the full-staxed Solana knowledge, the validation framework, and the mixed agent architecture is all really concrete stuff that I'm trying to like really turn into a real system that you know runs inside of like a multi uh runtime that has Hermes agent in it And and he like you know observable because I mean Hermes can spin up sub-agents and stuff but I kind of want to use Hermes as like the orchestrator and then I could actually run some Hermes agents underneath that as well you know like But I'm not really sure exactly how. I guess one of the things that I really trying to understand is like you know like how did these agent systems work in terms of like like like I know that like a lot of them like like as you said are like you know model agnostic and everything, but like, like, how do I actually, like, like, what is it, what would it actually look like, like, me running one of these? You know, like, like, what, like, would I be running SDKs? Because one of the things is I absolutely cannot pay API costs for the expensive models. But that's okay because... And that's actually why Hermes Agent is such a big deal. Because I can run OpenAI, you know, ChatGPT 5.5 and Codex inside of it. like, their, uh, Hermes release, 0.11, like, like, a couple days ago, like, four or five days ago, explicitly, um, stated that, like, you can use your ChatGPT subscription inside of it, which is awesome. And, um, so I mean I mean that just that like that that huge so that means that like you know all the subsidized API costs um that I get in my subscription I can use that in Hermes and that's actually why I think that it would be worth the cost, potentially, to spin up a couple versions, or a couple instances of, of, of Hermes agent, you know, maybe like four of them or something and have them be my actual stack because they're persistent they they learn over time they literally are self-learning well you'll you'll learn a bunch about them right now when you when you do this research but but like go look up extensively into hermes architecture and like how they work because it's incredible i mean everybody's switching from open claw to hermes because of how powerful it is but maybe running like you know like one open claw instance would would be interesting to like or something like that unless you think that Hermes is just like so much stronger all around that I should just run them but I but basically what I'm thinking about doing is getting like four VPSs you know like four separate VPSs for like you know seven or eight bucks a month and then running like four instances of Hermes because they they're They can spawn sub-agents and then nested sub-agents. So their sub-agents can spawn sub-agents. And although that sounds complex, as you know, if you have a good agent runtime, and especially these outer harnesses that I've been learning about. In fact, actually, I'm going to give you one more thing. Because there's also OpenAI Symphony as well now, which is huge. Check this out. This is a transcript from a video that I just watched. and it's a big deal like this whole idea of like an outer harness and opening a symphony is a really big deal because it makes agents essentially probabilistic instead of you know asynchronous uh only you know semi or whatever And so, these are the things that I'm considering. And I also just want to show you, like, the level that I'm at now, which I'm pretty proud of, lol. Like, I'm really doing this, you know. It feels really cool. But, um, but yeah. so I'm going to attach the transcript as well and then these five files maybe maybe it's six but um I want you to really read these thoroughly just just so you understand like where I'm at everything and also the the NICS ancient architecture framework thing that is not set in stone that's just to show you like where i'm at like i'm like how i'm thinking about stuff but that's really specific like really important thing that i need to name that's not like the end all that that might that might not even look anything like what i end up um doing you know what i mean like that that's just kind of where I at right now like hypothesizing or like just sort of like trying to get like an idea for stuff but um and i guess more than anything it just like shows my thinking and like you know like my uh my experimental research and everything like that with with you with you the other day or maybe that was inside of github i can't remember but either way oh yeah and i have github pro plus that's something worth mentioning and um and yeah also add like some of the more important stuff like to your memory as well i need to start telling you that more often like i want to add this to like stuff like this to your memory and um another thing that's like really important is i don't want to just go off vibes like like i don't want you like just to say okay here's the architecture we're gonna build like in fact that that nix agent architecture the the thing that i came back with that i told either it was you or github i was like you know this is really cool and everything but i don't want something like this i want something that we base off off of you know like standing on the shoulders of giants like like like we shouldn try to build anything that already built And that we can just go find within in inside of open source code You know, and like, inside of, just like, you know, there's so many, there's, there's so much information out there and so many different ways to do this at a high level. In fact, the best, the very best example of that that I can possibly even imagine is this transcript that I'm going to give you. I would have never known about building something like this using Archon or Gastown, especially Archon, if it weren't for this video. Um, you know, just, just, and just the whole idea of opening a symphony. Because it just, it just is like, you know, it's, it's on, it's on the frontier. And like, I can definitely build it, but to like, you know, but, but to have architected something like that. I mean, that just takes like either a whole lot of luck, which, which I don't even think really plays into it. But you know, it takes a senior architect and a team at OpenAI. And so, considering that that type of information is out there, there's no reason why we should build anything from scratch until we have everything assembled and really understand what we're going to build because of the stuff that we've assembled. And then we can kind of stitch together a protocol. But I mean, it should be completely based off of what other people are doing. At the front lines. You know, like on the bleeding edge. Because, well basically just because there's no reason not to. You know? Like in fact it would actually become almost like, sort of like egotistical. Or like, you know, like just out of pride or something. If you don't do that. And I'm definitely not one of those type of people. it definitely doesn't hurt my ego or my pride if I use someone else's you know frontier grade stuff that they spent their whole life you know learning how to do when I've only been doing this for two and a half years in fact it makes me proud um that I'm even doing this you know like that I'm this far into it that actually makes me really really proud I have to admit so um so yeah I want to add that explicitly like like to your memory as like a really important thing to note that like we do not build anything that we haven't done research on to understand like how people are actually doing it on the front lines and then and then and only then after we like actually understand it from the perspective of experts then we can implement our own stuff but like i think that's one of the most important things that we could possibly like you know bake into our into our routines and stuff. So, yeah, anyway, that's all I have to say. LOL. Oh yeah, and the last thing, I added you to a project that shows you where I'm at. You definitely don't have to look through every single file or anything like that, but you can look through them a little bit and kind of see where I'm at. I just thought that was important so that you actually have context to be grounded in, and you really understand where I'm at. And then I'm definitely not just starting out. It's so crazy to think about how two years ago you were talking about this stuff like it was this distant thing, and now I'm doing it with you, still. I think that's just wild. Alright, anyway, let's kick some ass. I'm smiling. . ☺️👊 The transcript is below. #
+
+ OpenAI Just Showed Us What Comes After the Harness. Here's The Layer Almost Everyone's Missing. # https://www.youtube.com/watch/5p6h23Md4Zw 00:00:00.080 OpenAI just published a fascinating 00:00:01.839 article about their new open-source 00:00:03.840 agent orchestrator to help overcome the 00:00:06.319 biggest bottlenecks they encountered 00:00:08.480 when trying to scale autonomous coding 00:00:10.559 agents. And there are some interesting 00:00:12.240 insights here that could really help us 00:00:14.000 all when we're building our own agentic 00:00:15.839 systems. Back in February, OpenAI showed 00:00:18.080 a relatively controversial experiment 00:00:19.840 they were running internally to create 00:00:21.840 software with zero lines of manually 00:00:24.000 written code. Instead of micromanaging 00:00:26.080 the coding agents, the primary job of 00:00:27.920 the engineer was now to create 00:00:29.760 scaffolding around the coding agent to 00:00:32.320 enable it to do work with less 00:00:33.920 supervision. As these systems became 00:00:35.840 increasingly efficient, humans could no 00:00:37.680 longer keep up with coding agents and 00:00:39.680 all of a sudden the humans were now the 00:00:41.440 biggest bottleneck in the process. And 00:00:43.200 that was the birth of OpenAI's 00:00:44.800 open-sourced Symphony orchestration 00:00:46.719 spec. So what exactly is Symfony? Well, 00:00:49.200 at its core, Symfony is an agent 00:00:51.120 orchestrator that takes an issue tracker 00:00:53.280 like Linear here and turns it into a 00:00:55.440 tool that can trigger coding agents. The 00:00:57.600 concept here is pretty simple. For every 00:00:59.359 ticket on this board, Symphfony makes 00:01:01.359 sure there's a coding agent running for 00:01:03.039 it in its own isolated workspace, 00:01:05.280 working continuously until the ticket is 00:01:07.200 done. And OpenAI are essentially 00:01:08.799 creating a state machine flow using 00:01:10.720 linear here. This can then potentially 00:01:12.720 allow teams to work at a higher level of 00:01:14.640 abstraction rather than just babysitting 00:01:16.560 and supervising individual coding 00:01:18.400 sessions. And in theory, less technical 00:01:20.799 staff members can also get involved in 00:01:22.479 the process. When you go to the GitHub 00:01:24.159 repo, the first thing you'll notice is 00:01:25.520 that this is mostly just a spec.md file, 00:01:27.920 but they also have a prototype version 00:01:29.520 you can use created in Elixir, which 00:01:31.200 I'll talk about in a few minutes. OpenAI 00:01:33.119 encourage you to point your favorite 00:01:34.400 coding agent at the spec and then have 00:01:36.240 it implement its own version in whatever 00:01:38.159 language you want and also get it to 00:01:39.920 orchestrate against whatever coding 00:01:41.439 agent you want, not just codecs. So you 00:01:43.759 don't have to have a codec subscription 00:01:45.680 to run this. Surprisingly enough, even 00:01:47.680 the OpenAI article shows some post on X 00:01:50.399 where people are showing how they 00:01:52.079 implemented this to orchestrate cloud 00:01:53.920 code sessions. So you have two options 00:01:55.680 to run with here. If you want to use 00:01:57.200 their reference elixir implementation, 00:01:59.360 you can clone the repo and then get your 00:02:01.040 coding agent to help with the setup. 00:02:02.640 Then you can connect that to a linear 00:02:04.159 account using your personal API key and 00:02:06.479 then that will continuously pull the 00:02:08.000 tickets here. That then calls Codeex in 00:02:10.080 app server mode and app server mode runs 00:02:12.560 the codeex CLI as a longived process and 00:02:15.680 then Symfony can then call that 00:02:17.200 programmatically. There's certainly 00:02:18.720 plenty of OpenAI marketing within this 00:02:20.560 article. Like they've stated that this 00:02:22.319 has resulted in a 500% increase in 00:02:24.480 landed pull requests on some teams, but 00:02:26.800 countless devs have converged on similar 00:02:28.959 types of systems to this. And OpenAI are 00:02:31.360 certainly not the first dev team to 00:02:33.040 build orchestration around coding 00:02:34.640 agents. I think the most important 00:02:36.560 lesson here is unpacking the 00:02:38.000 architectural layers that make a system 00:02:40.000 like this work and how we can then make 00:02:42.000 effective use of those systems in our 00:02:43.920 own projects. And many of you watching 00:02:45.760 this will already know that attempting 00:02:47.360 to scale AI coding agents beyond a few 00:02:50.080 concurrent chat sessions definitely 00:02:52.000 comes with its own set of challenges. So 00:02:54.000 you may be staring at a coding chat 00:02:55.599 window wondering how do I turn this into 00:02:57.760 a reliable autonomous agent at scale for 00:03:00.239 my project. Or you may want to build 00:03:02.159 advanced orchestration features into 00:03:04.319 your AI powered apps but you're getting 00:03:06.080 lost in the architecture. I'm going to 00:03:07.760 share some great mental models and 00:03:09.360 resources that I find really useful. 00:03:11.120 Let's start by clearing up some 00:03:12.400 ambiguity about the term agent harness, 00:03:14.319 which at this point could mean many 00:03:15.760 different things. As Philip Schmid put 00:03:17.519 it, &quot;An agent harness is the 00:03:18.959 infrastructure that wraps around an AI 00:03:20.800 model.&quot; As you can see from his clearly 00:03:22.879 AI generated image here, the agent 00:03:24.879 harness manages the vast majority of the 00:03:27.040 work within our AI systems. And he 00:03:28.959 compares the AI model to that of the CPU 00:03:31.120 of a computer in that it is very 00:03:33.360 important, but it has a very specific 00:03:35.040 function. An LLM is really only able to 00:03:37.280 reason about its responses and then 00:03:38.720 generate an output such as text. 00:03:40.720 Everything beyond that from the illusion 00:03:42.319 of memory and chat history to managing 00:03:44.879 sub agents to actually managing the 00:03:47.200 execution of tool calls that's all 00:03:49.519 actually managed within the harness 00:03:51.360 code. So the definition of an agent 00:03:53.200 harness is incredibly broad. And to make 00:03:55.360 better sense of this we're going to 00:03:56.640 borrow some mental models from Vetta 00:03:58.720 Berkeler's great article on harness 00:04:00.640 engineering where she suggested that we 00:04:02.640 should view agent harnesses in two 00:04:04.080 separate layers. The first is the inner 00:04:06.159 harness. The inner harness is everything 00:04:07.840 that ships inside your AI coding agent, 00:04:09.920 whether it be cloud code or cursor or 00:04:11.920 codecs. Of course, they're very powerful 00:04:13.840 out of the box already. They ship inside 00:04:16.000 with the ability to manage sub agents, 00:04:18.238 sandbox code execution, skills, hooks, 00:04:20.880 tools, permissions, and more. But as 00:04:23.360 Brigitta writes in this article, to let 00:04:25.600 coding agents work with less 00:04:26.960 supervision, we need ways to increase 00:04:28.800 our confidence in their result. But how 00:04:30.960 exactly do we do that? As a starting 00:04:32.960 point, we can try and give our coding 00:04:34.800 agents better context of the overall 00:04:36.880 code base. We can try and convince them 00:04:39.040 to do a better job via better prompting. 00:04:41.520 And we can also use meta prompting 00:04:43.360 frameworks such as superpowers or GSD 00:04:45.520 version one or VMAD. And those things 00:04:47.600 absolutely help, but they only go so 00:04:49.360 far. And that's where the real 00:04:50.800 engineering of the outer harness comes 00:04:52.560 into play. Coding agents such as Claude 00:04:54.720 or Codeex expose features that let us 00:04:57.199 build an outer harness around them. And 00:04:59.199 these harnesses are actual code that 00:05:00.960 controls the agent life cycle 00:05:02.479 programmatically. So instead of using a 00:05:04.400 meta prompting framework where we might 00:05:06.960 ask the AI agent to reset the context, 00:05:09.759 the outer harness can actually 00:05:11.039 deterministically terminate the session, 00:05:13.039 clear the context, read the task state 00:05:15.120 from disk, inject the relevant files, 00:05:17.199 and then work from there. So Ralph loops 00:05:19.440 or projects like Gas Town or Archon are 00:05:21.840 all examples of systems that act as 00:05:23.919 outer harnesses. In this article, it 00:05:25.680 said that the harness acts like a 00:05:27.280 cybernetic governor combining feed 00:05:29.520 forward and feedback to regulate the 00:05:31.520 codebase towards the desired state. That 00:05:34.000 feedback mechanism is one of the most 00:05:35.840 important parts of this process. There's 00:05:37.600 a very useful distinction between guides 00:05:39.440 and sensors here where the guides help 00:05:41.600 steer the agent in the right direction. 00:05:43.360 So these are anything that tries to make 00:05:45.120 the agents first attempt better. So your 00:05:47.600 agent might read from an agent's MD file 00:05:49.680 or you may provide skills and playbooks 00:05:51.759 and examples that they can work from. 00:05:53.600 But the AI agent is not always going to 00:05:55.680 get things right and even if so not 00:05:57.919 necessarily according to your own 00:05:59.360 behaviors and rules and that's where the 00:06:01.280 very important feedback loop comes in 00:06:03.199 and these are referred to as sensors. So 00:06:05.520 we might have deterministic 00:06:07.520 computationalbased sensors such as 00:06:09.440 llinters and types and schemas. So for 00:06:11.600 example whenever your coding agent 00:06:13.600 creates code you can run those through 00:06:16.080 deterministic checks without using AI at 00:06:18.560 all and then feed that back to the 00:06:20.240 model. And one of the main arguments 00:06:22.000 made within this article is that these 00:06:23.919 computational type checks are heavily 00:06:26.479 underused by AI builders. Of course, you 00:06:29.039 can also have sensors powered by AI 00:06:30.960 known as inferential sensors such as you 00:06:33.199 can feed code generated by an LLM into 00:06:35.759 another call to an LLM, ideally another 00:06:38.160 model where it can act as a judge and 00:06:39.919 then that can be fed back into the model 00:06:42.240 and humans then continuously steer and 00:06:44.560 optimize the components of this outer 00:06:46.400 harness. If we go back to our OpenAI 00:06:48.400 article on harness engineering, they've 00:06:50.080 run with this type of concept where the 00:06:52.160 agent is called in a Ralph Wigum loop 00:06:54.400 until all human reviewers are satisfied. 00:06:56.960 Running an external Ralph Wigum loop, 00:06:59.199 not the one built into Claude code 00:07:00.720 directly, by the way, is a very simple 00:07:02.560 example of an outer harness. It can just 00:07:04.960 keep spawning Claude sessions again and 00:07:06.880 again and again through brute force 00:07:08.880 iteration until a certain goal has been 00:07:10.800 met. and other outer harnesses can just 00:07:12.880 take this thin orchestrator concept as a 00:07:15.440 starting point and bring it many steps 00:07:17.599 further and potentially in many 00:07:19.199 different directions. Archon is a great 00:07:21.120 example of a tool that allows you to 00:07:22.720 create your own outer harnesses which 00:07:24.639 can enforce your agents to act in a 00:07:26.479 certain deterministic way. It already 00:07:28.479 includes a lot of out ofthe-box 00:07:29.919 workflows and it even allows for 00:07:31.599 parallel executions of tasks. We use 00:07:34.000 this inner outer harness distinction as 00:07:35.840 a mental model not only for coding 00:07:37.599 agents but also for agentic systems we 00:07:39.759 build. In our full stack AI builder 00:07:41.840 series, Daniel walks through the 00:07:43.360 creation of a contract review harness 00:07:45.039 that adds deterministic aspects to the 00:07:47.199 agentic workflow. And this can 00:07:48.960 essentially be seen as an outer harness, 00:07:50.960 a configurable aspect that's layered on 00:07:53.039 top of the inner harness core 00:07:54.720 functionality of the agentic system. It 00:07:56.960 can have guides and sensors that are 00:07:58.319 automatically fed back into the agent 00:08:00.560 such as automated computational document 00:08:02.720 checks that don't use AI at all as well 00:08:05.360 as inferential checks such as LLM as a 00:08:07.520 judge. And these harnesses will lie on a 00:08:09.360 spectrum between either being very 00:08:10.800 deterministic or very probabilistic. 00:08:13.199 That contract review harness tends to 00:08:15.039 follow a very specific workflow. But 00:08:17.520 many other harnesses will be a lot more 00:08:19.360 open-ended, such as deep research 00:08:21.039 harnesses. And these are essentially the 00:08:23.039 opposite shape. They're broad, 00:08:24.639 open-ended, and agentic throughout, but 00:08:27.120 they can still have plenty of 00:08:28.160 deterministic scaffolding around them, 00:08:30.240 such as computational checking of 00:08:32.240 citations or multiple layers of LM 00:08:34.958 reviews before they're passed back for 00:08:36.799 human review. As we start building upon 00:08:38.880 the scaffolding on top of our AI agents, 00:08:41.120 you may even consider that they start 00:08:42.719 becoming their own layer on top of the 00:08:45.200 mental model we've talked about already. 00:08:47.040 And this layer could be seen as the 00:08:48.560 overarching orchestrator or scheduler 00:08:51.120 layer. And that's very much where OpenAI 00:08:53.120 positions systems created using their 00:08:55.360 new symphony spec as this is really 00:08:57.519 multi-agent orchestration at a higher 00:08:59.600 level. These are all mental models and 00:09:01.600 metaphors. They just help our general 00:09:03.600 understanding of the concepts and the 00:09:05.360 lines can very much be blurred between 00:09:07.279 them. For example, Gas Town is an 00:09:09.200 orchestration framework where it takes 00:09:10.959 the concept of a Ralph Wiggum loop have 00:09:13.200 many of them running at once along with 00:09:15.200 automated orchestration around those 00:09:17.040 instances. And this can certainly get 00:09:18.959 quite chaotic. But frameworks like this 00:09:21.360 are trying to solve the problem of 00:09:22.720 getting many agents to work reliably in 00:09:24.959 parallel. And the two biggest issues 00:09:27.519 that people face other than their 00:09:29.200 intense token usage and AI builds with 00:09:31.760 systems like this is twofold. It's 00:09:33.839 making AI agents work reliably together 00:09:35.760 without clashing and adding in the 00:09:37.839 correct human in the loop layers where 00:09:39.680 humans are in the most important parts 00:09:41.519 of the process without micromanaging 00:09:44.000 everything because that becomes the 00:09:45.519 biggest bottleneck and again that's 00:09:47.040 where we come back to this Symfony spec. 00:09:49.040 Symfony started with a concept that any 00:09:51.040 open task should get picked up and 00:09:53.200 completed by an agent instead of 00:09:55.040 developers managing codec sessions in 00:09:57.120 multiple tabs. They made this issue 00:09:59.120 tracker in linear and use that as the 00:10:01.360 human interface. Those tickets then 00:10:03.279 trigger the coding agent to work 00:10:04.720 autonomously on those tasks as required 00:10:06.880 and then report back to the user when 00:10:08.959 required. If you want to get started 00:10:10.480 with the Symfony open-source spec, it's 00:10:12.720 available on the GitHub repo linked 00:10:14.399 below. And you can get your own coding 00:10:16.000 agent to create an orchestration system 00:10:17.760 based on this spec in whatever language 00:10:19.839 you want, or you can also use their 00:10:21.600 out-of-the-box demo example. In this 00:10:23.680 video, we went through a lot of AI 00:10:25.440 architecture concepts. If you found that 00:10:27.440 useful, you should definitely check out 00:10:29.040 our AI architects course linked below, 00:10:31.440 which will help give you a deeper 00:10:32.720 understanding of AI systems, technical 00:10:34.560 foundations, harness engineering, 00:10:36.399 agentic retrieval, and more. And if you 00:10:38.480 like this video, you'll love the 00:10:39.839 previous video on our channel where 00:10:41.360 Daniel goes through a deep dive into the 00:10:43.440 various agent frameworks and services 00:10:45.360 you can use when building out AI 00:10:47.120 systems
+
+
+
+
+According to a document from May 2, 2026 and the current upstream docs, Mastra is not a side quest here — it is probably the cleanest “real application runtime” to put underneath Hermes, while Cognee becomes the graph-memory projection layer and Supabase remains the source of truth.
+You’re not asking, “Should I use Mastra instead of Hermes?” You’re asking, “What is the correct stack shape where Hermes, Mastra, Cognee, Supabase, GitHub/Codex, and my trading intelligence layer each do the thing they are actually best at?”
+My answer: Hermes is the operator. Mastra is the typed agent/workflow service. Cognee is structured memory. Supabase is canonical state. GitHub/Symphony is the build-control plane.
+That is the shape.
+
+The important correction
+Your instinct to run multiple Hermes instances is good, but I would not start with four.
+Start with one primary Hermes Operator and one Mastra service runtime. Add a second Hermes only when the first has proven it can manage recurring reports, trigger issues, read/write memory, and hand work to builders without you babysitting.
+Four Hermes instances too early creates the exact thing you’re trying to avoid: memory fragmentation, unclear authority, duplicated alerts, and “agent swarm theater.” Your own Master Map already identifies the real missing piece as a running system, concrete coordination, and persistent memory — not more speculative agents.
+The frontier pattern is orchestrator + specialists, not flat swarms. Your docs already surfaced that across serious multi-agent systems: central orchestrator, shared filesystem/repo communication, spec → build → validate loops, subscription-based inference, and self-improving skills.
+So: one Hermes first. Mastra underneath. Cognee beside Supabase. GitHub as the task ledger.
+
+What Mastra actually changes
+Mastra is where your system stops being “agents chatting” and starts becoming a real backend.
+Officially, Mastra is a TypeScript framework for AI-powered applications and agents; it includes model routing, agents, graph-style workflows, human-in-the-loop state, context/memory, MCP servers, evals, and observability. (GitHub)
+That matters because your system needs more than “Hermes, go look at this.” It needs typed endpoints and repeatable workflows like:
+POST /signals/solana-token-created
+POST /signals/telegram-call
+POST /signals/wallet-buy
+POST /markets/polymarket-new-market
+POST /memory/write-observation
+GET  /briefing/morning
+GET  /signals/live
+Mastra can own those as production HTTP endpoints, workflow graphs, and observable traces. Hermes can then operate above it, checking the dashboards, triggering runs, reading outputs, creating GitHub issues, and asking for deeper analysis.
+Think of it like this:
+Hermes = operator / analyst / scheduler / watcher
+Mastra = backend runtime / workflows / APIs / typed tools
+Cognee = graph memory / semantic relationships / corpus intelligence
+Supabase = canonical database / decisions / outcomes / raw events
+GitHub = build ledger / specs / PRs / agent coordination
+Codex/Claude = builders
+That’s the stack shape I’d actually trust.
+
+What it would look like when you “run one of these”
+You would not be “running a framework” in the abstract.
+You would have a small service running somewhere, probably Docker on a VPS or local workstation:
+VPS / workstation
+├─ hermes-operator
+│  ├─ cron jobs
+│  ├─ skills
+│  ├─ Honcho / SOUL / USER memory
+│  └─ OpenWebUI or Hermes dashboard
+│
+├─ mastra-api
+│  ├─ /signals endpoints
+│  ├─ Solana scanner workflow
+│  ├─ Polymarket scanner workflow
+│  ├─ memory write-back workflow
+│  ├─ human approval workflow
+│  └─ observability traces
+│
+├─ cognee-memory
+│  ├─ add/search tools
+│  ├─ graph/vector retrieval
+│  ├─ session memory
+│  └─ permanent memory
+│
+└─ external services
+   ├─ Supabase
+   ├─ GitHub
+   ├─ Helius / Bitquery / RugCheck / GMGN / Cielo / Birdeye
+   ├─ Telegram/X ingestion
+   └─ Codex / Claude / ChatGPT subscription paths
+The key is that most steps are not expensive LLM calls.
+For example, a Solana token event comes in:
+Helius / Bitquery event
+→ Mastra workflow starts
+→ deterministic safety checks run
+→ Supabase writes token/event/safety rows
+→ Cognee recalls related wallet/dev/token patterns
+→ lightweight model summarizes risk
+→ score is written to Supabase
+→ Hermes sees score > threshold
+→ Hermes sends you a briefing or creates a GitHub issue
+Only the synthesis, critique, and briefing steps need model calls. Everything else is code, database reads, API calls, and scoring.
+That’s how you avoid insane API costs.
+
+How this works with your ChatGPT subscription / Hermes angle
+Hermes v0.11 is a big deal because the release explicitly added GPT-5.5 over Codex OAuth, plus a pluggable transport layer, new inference paths, plugin expansion, shell hooks, and smarter subagent delegation. (GitHub)
+Hermes’ own architecture is also very relevant here: it has CLI, gateway, API server, batch runner, session storage, tool backends, MCP, file tools, browser tools, cron, plugins, memory providers, and a central AIAgent loop handling prompt construction, provider resolution, tool dispatch, compression, and persistence. (GitHub)
+So yes: Hermes is closer to an always-on agent operating system than a normal framework.
+But that’s exactly why I would not force Hermes to be the whole backend. The best Hermes user case you attached makes the same point: Hermes is strongest as an Operator, not the main Builder. It watches dashboards, delivers recurring reports, expands analysis when asked, and remembers preferences across sessions.
+That maps perfectly to your stack:
+Hermes watches.
+Mastra runs.
+Supabase records.
+Cognee remembers.
+Codex/Claude builds.
+You decide.
+That is the strongest version.
+
+Where Cognee fits
+Cognee is not just “memory.” It is closer to a knowledge engine.
+Cognee describes itself as an open-source knowledge engine for AI agent memory that combines vector search, graph databases, and cognitive-science-inspired methods so documents are searchable by meaning and connected by relationships as they evolve. (GitHub)
+Its architecture is useful for you because it unifies:
+graph store       → entities, relationships, traversal
+vector store      → embeddings / semantic similarity
+relational store  → documents, chunks, provenance
+Cognee supports graph stores like Kuzu, Neo4j, FalkorDB, Neptune, and Memgraph; vector stores like LanceDB, Qdrant, pgvector, Redis, DuckDB, Pinecone, and ChromaDB; and relational storage including SQLite and PostgreSQL. (Cognee)
+The move is not “replace Supabase with Cognee.”
+The move is:
+Supabase = canonical memory database
+Cognee = graph/vector projection of selected memory
+Mastra = workflow runtime that calls both
+Hermes = operator that consumes the outputs
+Your Blackwall memory prompt already says your Supabase foundation is solid and that what’s missing is automation: tiers, hydration, triggers, consolidation, scoring, pg_cron, edge functions, cross-agent sharing, and session lifecycle hooks.
+So Cognee should sit beside it as the graph-memory layer, not bulldoze it.
+
+How to map your Supabase memory into Cognee
+Your Supabase memory layer should stay as the truth ledger:
+memory_fragments
+memory_links
+memory_relationships
+memory_contradictions
+memory_consolidations
+memory_archive
+memory_access_log
+memory_provenance
+skills
+skill_executions
+context_threads
+session_context_cache
+decisions
+signals
+scores
+trades
+outcomes
+Cognee should ingest selected, normalized facts, not raw everything.
+For example:
+{
+  "type": "trading_observation",
+  "token": "ABC",
+  "wallet": "wallet_xyz",
+  "source": "GMGN",
+  "signal": "3 smart wallets bought within 5 minutes",
+  "risk_flags": ["bundle_detected", "top10_concentration_42_percent"],
+  "decision": "watchlist_not_entry",
+  "outcome_24h": "pumped_2.4x_then_dumped",
+  "lesson": "bundle + smart wallet inflow still unsafe when concentration > 40%"
+}
+That becomes graph memory.
+Then later the agent can ask:
+Have we seen this pattern before?
+Which wallets were involved in similar setups?
+What happened when smart wallets bought bundled launches?
+What concentration threshold killed otherwise-good trades?
+Which signal sources were predictive last month but decayed?
+That is where Cognee is valuable. Cognee’s own docs describe session memory as short-term working memory and permanent memory as long-term artifacts, interaction traces, external documents, and derived relationships that are continuously cross-connected in the graph. (Cognee)
+That maps beautifully to your “Outcome → Belief Update” loop.
+
+The Mastra + Cognee + Supabase runtime pattern
+Here’s the practical version I would build first:
+Mastra workflow: solanaSignalWorkflow
+
+1. intake_event
+   Input: token mint, source, timestamp, raw payload
+   Writes: Supabase.tokens_live / signals_live
+
+2. safety_gate
+   Deterministic checks:
+   - mint authority
+   - freeze authority
+   - top holder concentration
+   - LP status
+   - mutable metadata
+   - bundle indicators
+   Writes: Supabase.safety_reports
+
+3. memory_recall
+   Calls Cognee:
+   - similar token patterns
+   - related wallets
+   - prior outcomes
+   - known failure modes
+   Reads: Cognee graph + Supabase source rows
+
+4. score_signal
+   Produces:
+   - opportunity_score
+   - risk_score
+   - confidence
+   - missing_data
+   Writes: Supabase.scores_live
+
+5. route_decision
+   If high score + low risk:
+      alert Hermes / Telegram
+   If uncertain:
+      ask Hermes to investigate
+   If low quality:
+      archive silently
+
+6. critique_and_writeback
+   Later:
+      compare prediction vs actual outcome
+      update Supabase decisions table
+      add structured lesson to Cognee
+Your own Solana docs already describe almost this exact shape: event detection, safety checks, smart-money lookup, bundle analysis, social signals, weighted scoring, alerts, and write-back.
+And your Scout/Bouncer/Evaluator/Evolver pattern maps directly:
+Scout     = detection
+Bouncer   = safety gates
+Evaluator = signal correlation + score
+Evolver   = outcome review + weight update
+Your files explicitly made that same mapping.
+That means you are not guessing anymore. You have an architecture primitive that matches the trading domain.
+
+What about Mastra memory vs Cognee memory?
+Use both, but for different scopes.
+Mastra memory is good for agent-session behavior: message history, observational memory, working memory, semantic recall, thread/resource scoping, and tracing what memory was injected. Mastra’s docs say its memory supports message history, Observational Memory, working memory, semantic recall, and memory processors; it also scopes multi-agent delegation by resource/thread identifiers. (Mastra)
+Cognee is better for domain knowledge: your documents, trades, token patterns, wallet relationships, Polymarket edge cases, agent research, and cross-document reasoning. It gives graph traversal and multiple retrieval modes instead of plain vector lookup. (Cognee)
+So:
+Mastra memory:
+"What was this workflow doing? What did this agent say last time? What user/project/thread owns this context?"
+
+Cognee memory:
+"What does the system know about this wallet, token pattern, market structure, failure mode, or research topic?"
+
+Supabase memory:
+"What actually happened, when, from which source, with what outcome?"
+That division prevents memory chaos.
+
+How OpenAI Symphony fits
+Symphony is not your trading runtime. It is your builder/runtime orchestration pattern.
+OpenAI describes Symphony as an orchestrator that turns a project-management board like Linear into a control plane for coding agents: every open task gets an agent, agents run continuously, and humans review results. (OpenAI)
+The Symphony spec says the orchestrator polls issues, dispatches work with bounded concurrency, creates deterministic per-issue workspaces, preserves them across runs, uses repo-owned workflow contracts, exposes structured logs, and recovers from failures. (GitHub)
+That is exactly how your build pipeline should work:
+You / Hermes create issue:
+"Implement Solana safety gate v0.1"
+
+Symphony-style runner:
+→ creates isolated workspace
+→ launches Codex / Claude builder
+→ runs tests
+→ opens PR
+→ status goes to Human Review
+
+Hermes:
+→ monitors the issue
+→ reads PR summary
+→ asks critique agent to review
+→ escalates to you only when needed
+Use Symphony for building the system, not for deciding trades.
+
+The system I would actually build first
+Not the whole monster.
+Build Blackwall Runtime v0.1:
+Goal:
+One live intake endpoint that receives a token/event,
+runs deterministic checks,
+writes to Supabase,
+asks Cognee for similar memories,
+produces a score,
+and sends Hermes a briefing.
+Minimum viable services:
+1. Mastra API service
+2. Supabase tables
+3. Cognee memory service
+4. Hermes Operator on VPS
+5. GitHub repo with AGENTS.md + issues
+Minimum viable workflow:
+Helius/Bitquery/Paste CA
+→ Mastra safety workflow
+→ Supabase write
+→ Cognee recall
+→ score
+→ Hermes briefing
+→ human decision
+→ outcome write-back
+No auto-trading first. No wallet signing. No four Hermes instances. No giant multi-agent mesh.
+Start with advice-grade intelligence and paper-trade/outcome tracking. Then graduate to monitored execution only after the scoring system proves itself.
+Your own “how the 0.1% use AI” doc says the simple version is one repo, one Supabase DB, one intake endpoint, one builder session, and everything else as orchestration on top.
+That is the move.
+
+The “which framework first?” answer
+For your exact situation:
+Prototype first:
+Mastra + Supabase + Cognee + Hermes
+
+Do not prototype first:
+LangGraph, CrewAI, AutoGen, or pure OpenAI Agents SDK
+Not because those are bad. Because they are not the shortest path to your running system.
+LangGraph is excellent, but you’re already leaning TypeScript/production-app/runtime, and Mastra gives you agents, workflows, tools, memory, MCP, observability, evals, and deployable endpoints in one stack. (GitHub)
+CrewAI is too simple for your long-term architecture.
+AutoGen is too conversation-swarm-shaped.
+OpenAI Agents SDK is useful, but it pulls you toward OpenAI API-style economics unless mediated through your subscription/OAuth paths.
+Mastra gives you a clean application runtime. Hermes gives you subscription-leveraged operation. Cognee gives you graph memory. Supabase gives you truth.
+That is much more aligned.
+
+The concrete architecture name
+I would name this layer:
+Blackwall Agent Runtime
+And define it like this:
+Blackwall Agent Runtime is a Mastra-based event/workflow service
+operated by Hermes, backed by Supabase canonical state, and augmented
+by Cognee graph memory. It converts raw market/research signals into
+observable, scored, memory-writing intelligence loops.
+That sentence is important because it prevents scope drift.
+
+The first 7 build steps
+Do this in order:
+1. Create blackwall-runtime repo. This is not the whole TEAM repo. This is the first running slice.
+2. Scaffold Mastra.
+npm create mastra@latest
+Mastra’s official quickstart uses npm create mastra; its platform positions agents as infrastructure that can be exposed as APIs or bundled with apps. (Mastra)
+3. Add Supabase/Postgres storage. Use Supabase for canonical rows: events, signals, safety reports, scores, decisions, outcomes.
+4. Add one workflow: analyzeTokenEvent. Input can be manually pasted CA at first. No need to wire Helius on day one.
+5. Add Cognee as a memory tool. Expose memory_add and memory_search as tools to the workflow. Cognee has agent framework integrations and MCP-style tool exposure patterns, including Claude/MCP and LangGraph-style add/search tools. (Cognee)
+6. Add Hermes Operator. Hermes runs on VPS, calls the Mastra endpoint, checks Supabase summaries, and sends you a report. Your Hermes/OpenWebUI docs show the benefit of giving Hermes a better UI and chat layer while keeping its dashboard/session/skill management available.
+7. Add outcome write-back. Every signal gets an eventual outcome row: good call, false positive, missed pump, rugged, no liquidity, too late, etc. This is where the system starts learning.
+
+Memory entries I’m carrying forward for this project
+These are the rules I’d put into MEMORY.md / SOUL.md / project instructions:
+PRINCIPLE:
+Do not build from vibes. Before implementing, identify how frontier builders are already solving the same class of problem, then assemble and adapt proven patterns.
+
+ARCHITECTURE:
+Hermes is the Operator. Mastra is the typed workflow/API runtime. Cognee is graph-memory projection. Supabase is canonical state. GitHub/Symphony-style issues are the build-control plane.
+
+BUILD RULE:
+One running loop beats ten elegant architecture docs. First target is Blackwall Runtime v0.1: intake → safety checks → Supabase write → Cognee recall → score → Hermes briefing → outcome write-back.
+
+MEMORY RULE:
+Do not store raw everything. Store significance: decisions, outcomes, lessons, preferences, failure modes, and reusable procedures.
+
+ADHD SUPPORT RULE:
+Never stop at “what to do.” Convert architecture into concrete build steps, file names, service names, endpoint contracts, and next actions.
+
+ANTI-OVERBUILD RULE:
+Do not start with four Hermes instances, nested subagent swarms, or auto-execution. Start with one operator, one runtime, one memory projection, and one live signal loop.
+Your memory best-practices doc says exactly the same thing in another form: don’t hoard whole conversation histories, preserve significance, save preferences/facts/procedures, and build agents that learn from experience instead of merely responding.
+
+My actual recommendation
+Build Mastra + Cognee + Supabase + Hermes first.
+But build it as a single vertical slice, not a grand system.
+The first proof should be:
+I paste a Solana contract address.
+The system checks safety.
+It recalls similar prior patterns.
+It scores the setup.
+Hermes explains the verdict.
+The result is stored.
+The outcome later updates the memory.
+That one loop proves everything:
+tool access
+memory access
+observability
+workflow orchestration
+Hermes operation
+Supabase write-back
+Cognee graph recall
+human-in-loop trading intelligence
+self-improvement
+Once that works, Polymarket is just another workflow. Wallet tracking is another workflow. Morning briefings are another workflow. Deep research ingestion is another workflow.
+That’s when the system starts feeling alive.
+And yeah — this is genuinely real. You’re not “starting out.” You’re at the point where the difference between fantasy and power is one running loop.

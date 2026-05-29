@@ -1,0 +1,3964 @@
+# Observability overview
+
+Mastra's observability system gives you visibility into every agent run, workflow step, tool call, and model interaction. It captures three complementary signals that work together to help you understand what your application is doing and why.
+
+- [**Tracing**](https://mastra.ai/docs/observability/tracing/overview): Records every operation as a hierarchical timeline of spans, capturing inputs, outputs, token usage, and timing.
+- [**Logging**](https://mastra.ai/docs/observability/logging): Forwards structured log entries from your application and Mastra internals to observability storage, correlated to traces automatically.
+- [**Metrics**](https://mastra.ai/docs/observability/metrics/overview): Extracts duration, token usage, and cost data from traces automatically, with no additional instrumentation required.
+
+## When to use observability
+
+- Debug unexpected agent behavior by inspecting the full decision path, tool calls, and model responses.
+- Monitor latency across agents, workflows, and tools to identify bottlenecks.
+- Track token consumption and estimated cost over time to control spending.
+- Diagnose workflow failures by tracing execution through each step.
+- Compare agent performance before and after prompt or model changes.
+
+## How the pieces fit together
+
+Tracing is the foundation. When observability is configured, every agent run, workflow execution, tool call, and model interaction produces a [span](https://opentelemetry.io/docs/concepts/signals/traces/#spans). Spans are organized into traces that show the full request lifecycle as a hierarchical timeline.
+
+Metrics are derived from traces automatically. When a span ends, Mastra extracts duration, token counts, and cost estimates without any extra code. These metrics power the dashboards in [Studio](https://mastra.ai/docs/studio/observability).
+
+Logs are correlated to traces automatically. Every `logger.info()`, `logger.warn()`, or `logger.error()` call within a traced context is tagged with the current trace and span IDs. You can navigate from a log entry directly to the trace that produced it.
+
+All three signals share correlation IDs (trace ID, span ID, entity type, entity name), so you can jump between a metric spike, the traces behind it, and the logs within those traces.
+
+## Get started
+
+Install `@mastra/observability` and a storage backend:
+
+**npm**:
+
+```bash
+npm install @mastra/observability @mastra/libsql @mastra/duckdb
+```
+
+**pnpm**:
+
+```bash
+pnpm add @mastra/observability @mastra/libsql @mastra/duckdb
+```
+
+**Yarn**:
+
+```bash
+yarn add @mastra/observability @mastra/libsql @mastra/duckdb
+```
+
+**Bun**:
+
+```bash
+bun add @mastra/observability @mastra/libsql @mastra/duckdb
+```
+
+Then configure observability in your Mastra instance. The following example uses composite storage to route observability data to DuckDB (which supports metrics aggregation) while keeping everything else in LibSQL:
+
+```ts
+import { Mastra } from '@mastra/core/mastra'
+import { LibSQLStore } from '@mastra/libsql'
+import { DuckDBStore } from '@mastra/duckdb'
+import { MastraCompositeStore } from '@mastra/core/storage'
+import {
+  Observability,
+  DefaultExporter,
+  CloudExporter,
+  SensitiveDataFilter,
+} from '@mastra/observability'
+
+export const mastra = new Mastra({
+  storage: new MastraCompositeStore({
+    id: 'composite-storage',
+    default: new LibSQLStore({
+      id: 'mastra-storage',
+      url: 'file:./mastra.db',
+    }),
+    domains: {
+      observability: await new DuckDBStore().getStore('observability'),
+    },
+  }),
+  observability: new Observability({
+    configs: {
+      default: {
+        serviceName: 'mastra',
+        exporters: [
+          new DefaultExporter(), // Persists traces to storage for Mastra Studio
+          new CloudExporter(), // Sends observability data to hosted Mastra Studio (if MASTRA_CLOUD_ACCESS_TOKEN is set)
+        ],
+        spanOutputProcessors: [
+          new SensitiveDataFilter(), // Redacts sensitive data like passwords, tokens, keys
+        ],
+      },
+    },
+  }),
+})
+```
+
+This enables tracing, log forwarding, and metrics. Mastra also supports external tracing providers like Langfuse, Datadog, and any OpenTelemetry-compatible platform. See [Tracing](https://mastra.ai/docs/observability/tracing/overview) for configuration details.
+
+## Storage
+
+Not all storage backends support every signal. Traces and logs work with most backends, but metrics require an OLAP-capable store like DuckDB (development) or ClickHouse (production). For the full compatibility list, see [storage provider support](https://mastra.ai/docs/observability/tracing/exporters/default).
+
+For production environments with high traffic, use composite storage to route the observability domain to a dedicated backend. See [production recommendations](https://mastra.ai/docs/observability/tracing/exporters/default) for details.
+
+## Next steps
+
+- [Tracing](https://mastra.ai/docs/observability/tracing/overview)
+- [Logging](https://mastra.ai/docs/observability/logging)
+- [Metrics](https://mastra.ai/docs/observability/metrics/overview)
+- [Mastra Studio](https://mastra.ai/docs/studio/observability)
+- [Automatic metrics reference](https://mastra.ai/reference/observability/metrics/automatic-metrics)
+
+
+
+
+
+# Memory
+
+Memory enables your agent to remember user messages, agent replies, and tool results across interactions, giving it the context it needs to stay consistent, maintain conversation flow, and produce better answers over time.
+
+Mastra agents can be configured to store [message history](https://mastra.ai/docs/memory/message-history). Additionally, you can enable:
+
+- [Observational Memory](https://mastra.ai/docs/memory/observational-memory) (Recommended): Uses background agents to maintain a dense observation log that replaces raw message history as it grows. This keeps the context window small while preserving long-term memory.
+- [Working memory](https://mastra.ai/docs/memory/working-memory): Stores persistent, structured user data such as names, preferences, and goals.
+- [Semantic recall](https://mastra.ai/docs/memory/semantic-recall): Retrieves relevant past messages based on semantic meaning rather than exact keywords.
+
+If the combined memory exceeds the model's context limit, [memory processors](https://mastra.ai/docs/memory/memory-processors) can filter, trim, or prioritize content so the most relevant information is preserved.
+
+Memory results will be stored in one or more of your configured [storage providers](https://mastra.ai/docs/memory/storage).
+
+## When to use memory
+
+Use memory when your agent needs to maintain multi-turn conversations that reference prior exchanges, recall user preferences or facts from earlier in a session, or build context over time within a conversation thread. Skip memory for single-turn requests where each interaction is independent.
+
+## Quickstart
+
+1. Install the `@mastra/memory` package.
+
+   **npm**:
+
+   ```bash
+   npm install @mastra/memory@latest
+   ```
+
+   **pnpm**:
+
+   ```bash
+   pnpm add @mastra/memory@latest
+   ```
+
+   **Yarn**:
+
+   ```bash
+   yarn add @mastra/memory@latest
+   ```
+
+   **Bun**:
+
+   ```bash
+   bun add @mastra/memory@latest
+   ```
+
+2. Memory **requires** a storage provider to persist message history, including user messages and agent responses.
+
+   For the purposes of this quickstart, use `@mastra/libsql`.
+
+   **npm**:
+
+   ```bash
+   npm install @mastra/libsql@latest
+   ```
+
+   **pnpm**:
+
+   ```bash
+   pnpm add @mastra/libsql@latest
+   ```
+
+   **Yarn**:
+
+   ```bash
+   yarn add @mastra/libsql@latest
+   ```
+
+   **Bun**:
+
+   ```bash
+   bun add @mastra/libsql@latest
+   ```
+
+   > **Note:** For more details on available providers and how storage works in Mastra, visit the [storage](https://mastra.ai/docs/memory/storage) documentation.
+
+3. Add the storage provider to your main Mastra instance to enable memory across all configured agents.
+
+   ```typescript
+   import { Mastra } from '@mastra/core'
+   import { LibSQLStore } from '@mastra/libsql'
+
+   export const mastra = new Mastra({
+     storage: new LibSQLStore({
+       id: 'mastra-storage',
+       url: ':memory:',
+     }),
+   })
+   ```
+
+4. Create a `Memory` instance and pass it to the agent's `memory` option.
+
+   ```typescript
+   import { Agent } from '@mastra/core/agent'
+   import { Memory } from '@mastra/memory'
+
+   export const memoryAgent = new Agent({
+     id: 'memory-agent',
+     name: 'Memory Agent',
+     memory: new Memory({
+       options: {
+         lastMessages: 20,
+       },
+     }),
+   })
+   ```
+
+   > **Note:** Visit [Memory Class](https://mastra.ai/reference/memory/memory-class) for a full list of configuration options.
+
+5. Call your agent, for example in [Studio](https://mastra.ai/docs/studio/overview). Inside Studio, start a new chat with your agent and take a look at the right sidebar. It'll now display various memory-related information.
+
+## Message history
+
+Pass a `memory` object with `resource` and `thread` to track message history.
+
+- `resource`: A stable identifier for the user or entity.
+- `thread`: An ID that isolates a specific conversation or session.
+
+```typescript
+const response = await memoryAgent.generate('Remember my favorite color is blue.', {
+  memory: {
+    resource: 'user-123',
+    thread: 'conversation-123',
+  },
+})
+```
+
+To recall information stored in memory, call the agent with the same `resource` and `thread` values used in the original conversation.
+
+```typescript
+const response = await memoryAgent.generate("What's my favorite color?", {
+  memory: {
+    resource: 'user-123',
+    thread: 'conversation-123',
+  },
+})
+
+// Response: "Your favorite color is blue."
+```
+
+> **Warning:** Each thread has an owner (`resourceId`) that can't be changed after creation. Avoid reusing the same thread ID for threads with different owners, as this will cause errors when querying.
+
+To list all threads for a resource, or retrieve a specific thread, [use the memory API directly](https://mastra.ai/docs/memory/message-history).
+
+## Observational Memory
+
+For long-running conversations, raw message history grows until it fills the context window, degrading agent performance. [Observational Memory](https://mastra.ai/docs/memory/observational-memory) solves this by running background agents that compress old messages into dense observations, keeping the context window small while preserving long-term memory.
+
+```typescript
+import { Agent } from '@mastra/core/agent'
+import { Memory } from '@mastra/memory'
+
+export const memoryAgent = new Agent({
+  id: 'memory-agent',
+  name: 'Memory Agent',
+  memory: new Memory({
+    options: {
+      observationalMemory: true,
+    },
+  }),
+})
+```
+
+> **Note:** See [Observational Memory](https://mastra.ai/docs/memory/observational-memory) for details on how observations and reflections work, and [the reference](https://mastra.ai/reference/memory/observational-memory) for all configuration options.
+
+## Memory in multi-agent systems
+
+When a [supervisor agent](https://mastra.ai/docs/agents/supervisor-agents) delegates to a subagent, Mastra isolates subagent memory automatically. No flag enables this as it happens on every delegation. Understanding how this scoping works lets you decide what stays private and what to share intentionally.
+
+### How delegation scopes memory
+
+Each delegation creates a fresh `threadId` and a deterministic `resourceId` for the subagent:
+
+- **Thread ID**: Unique per delegation. The subagent starts with a clean message history every time it's called.
+- **Resource ID**: Derived as `{parentResourceId}-{agentName}`. Because the resource ID is stable across delegations, resource-scoped memory persists between calls. A subagent remembers facts from previous delegations by the same user.
+- **Memory instance**: If a subagent has no memory configured, it inherits the supervisor's `Memory` instance. If the subagent defines its own, that takes precedence.
+
+The supervisor forwards its conversation context to the subagent so it has enough background to complete the task. Only the delegation prompt and the subagent's response are saved — the full parent conversation isn't stored. You can control which messages reach the subagent with the [`messageFilter`](https://mastra.ai/docs/agents/supervisor-agents) callback.
+
+> **Note:** Subagent resource IDs are always suffixed with the agent name (`{parentResourceId}-{agentName}`). Two different subagents under the same supervisor never share a resource ID through delegation.
+
+To go beyond this default isolation, you can share memory between agents by passing matching identifiers when you call them directly.
+
+### Share memory between agents
+
+When you call agents directly (outside the delegation flow), memory sharing is controlled by two identifiers: `resourceId` and `threadId`. Agents that use the same values read and write to the same data. This is useful when agents collaborate on a shared context — for example, a researcher that saves notes and a writer that reads them.
+
+**Resource-scoped sharing** is the most common pattern. [Working memory](https://mastra.ai/docs/memory/working-memory) and [semantic recall](https://mastra.ai/docs/memory/semantic-recall) default to `scope: 'resource'`. If two agents share a `resourceId`, they share observations, working memory, and embeddings — even across different threads:
+
+```typescript
+// Both agents share the same resource-scoped memory
+await researcher.generate('Find information about quantum computing.', {
+  memory: { resource: 'project-42', thread: 'research-session' },
+})
+
+await writer.generate('Write a summary from the research notes.', {
+  memory: { resource: 'project-42', thread: 'writing-session' },
+})
+```
+
+Because both calls use `resource: 'project-42'`, the writer can access the researcher's observations, working memory, and semantic embeddings. Each agent still has its own thread, so message histories stay separate.
+
+**Thread-scoped sharing** gives tighter coupling. [Observational Memory](https://mastra.ai/docs/memory/observational-memory) uses `scope: 'thread'` by default. If two agents use the same `resource` _and_ `thread`, they share the full message history. Each agent sees every message the other has written. This is useful when agents need to build on each other's exact outputs.
+
+## Observability
+
+Enable [Tracing](https://mastra.ai/docs/observability/tracing/overview) to monitor and debug memory in action. Traces show you exactly which messages and observations the agent included in its context for each request, helping you understand agent behavior and verify that memory retrieval is working as expected.
+
+Open [Studio](https://mastra.ai/docs/studio/overview) and select the **Observability** tab in the sidebar. Open the trace of a recent agent request, then look for spans of LLMs calls.
+
+## Switch memory per request
+
+Use [`RequestContext`](https://mastra.ai/docs/server/request-context) to access request-specific values. This lets you conditionally select different memory or storage configurations based on the context of the request.
+
+```typescript
+export type UserTier = {
+  'user-tier': 'enterprise' | 'pro'
+}
+
+const premiumMemory = new Memory()
+const standardMemory = new Memory()
+
+export const memoryAgent = new Agent({
+  id: 'memory-agent',
+  name: 'Memory Agent',
+  memory: ({ requestContext }) => {
+    const userTier = requestContext.get('user-tier') as UserTier['user-tier']
+
+    return userTier === 'enterprise' ? premiumMemory : standardMemory
+  },
+})
+```
+
+> **Note:** Visit [Request Context](https://mastra.ai/docs/server/request-context) for more information.
+
+## Related
+
+- [`Memory` reference](https://mastra.ai/reference/memory/memory-class)
+- [Tracing](https://mastra.ai/docs/observability/tracing/overview)
+- [Request Context](https://mastra.ai/docs/server/request-context)
+
+
+
+
+# Observational Memory
+
+**Added in:** `@mastra/memory@1.1.0`
+
+Observational Memory (OM) is Mastra's memory system for long-context agentic memory. Two background agents — an **Observer** and a **Reflector** — watch your agent's conversations and maintain a dense observation log that replaces raw message history as it grows.
+
+## Quickstart
+
+Enable `observationalMemory` in the memory options when creating your agent:
+
+```typescript
+import { Memory } from '@mastra/memory'
+import { Agent } from '@mastra/core/agent'
+
+export const agent = new Agent({
+  name: 'my-agent',
+  instructions: 'You are a helpful assistant.',
+  model: 'openai/gpt-5-mini',
+  memory: new Memory({
+    options: {
+      observationalMemory: true,
+    },
+  }),
+})
+```
+
+That's it. The agent now has humanlike long-term memory that persists across conversations. Setting `observationalMemory: true` uses `google/gemini-2.5-flash` by default. To use a different model or customize thresholds, pass a config object instead:
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'deepseek/deepseek-reasoner',
+    },
+  },
+})
+```
+
+See [configuration options](https://mastra.ai/reference/memory/observational-memory) for full API details.
+
+> **Warning:** When you use OM with a client application, send **only the new message** from the client instead of the full conversation history.
+>
+> Observational memory still relies on stored conversation history. Sending the full history is redundant and can cause message ordering bugs when client-side timestamps conflict with stored timestamps.
+>
+> For an AI SDK example, see [Using Mastra Memory](https://mastra.ai/guides/build-your-ui/ai-sdk-ui).
+
+> **Note:** OM currently only supports `@mastra/pg`, `@mastra/libsql`, and `@mastra/mongodb` storage adapters. It uses background agents for managing memory. When using `observationalMemory: true`, the default model is `google/gemini-2.5-flash`. When passing a config object, a `model` must be explicitly set.
+
+## Temporal gap markers
+
+Temporal gap markers insert a short reminder before a new user message when enough time has passed since the previous message in the thread. They help the agent and the UI see that the conversation resumed after a meaningful pause.
+
+Temporal gap markers are off by default. Enable them with `temporalMarkers: true` in the `observationalMemory` config:
+
+```typescript
+import { Memory } from '@mastra/memory'
+import { Agent } from '@mastra/core/agent'
+
+export const agent = new Agent({
+  name: 'my-agent',
+  instructions: 'You are a helpful assistant.',
+  model: 'openai/gpt-5-mini',
+  memory: new Memory({
+    options: {
+      observationalMemory: {
+        model: 'google/gemini-2.5-flash',
+        temporalMarkers: true,
+      },
+    },
+  }),
+})
+```
+
+Mastra inserts a temporal gap marker when the gap is at least 10 minutes. The marker is stored in memory and also emitted as a transient reminder event, so clients can render it as a lightweight timeline hint.
+
+The observer also sees these markers when it processes the thread, so the observations it writes can anchor memories to when they happened (for example, "User asked about deployment after a 2-day gap").
+
+See [the API reference](https://mastra.ai/reference/memory/observational-memory) for the full configuration shape.
+
+## Benefits
+
+- **Prompt caching**: OM's context is stable and observations append over time rather than being dynamically retrieved each turn. This keeps the prompt prefix cacheable, which reduces costs.
+- **Compression**: Raw message history and tool results get compressed into a dense observation log. Smaller context means faster responses and longer coherent conversations.
+- **Zero context rot**: The agent sees relevant information instead of noisy tool calls and irrelevant tokens, so the agent stays on task over long sessions.
+
+## How it works
+
+You don't remember every word of every conversation you've ever had. You observe what happened subconsciously, then your brain reflects — reorganizing, combining, and condensing into long-term memory. OM works the same way.
+
+Every time an agent responds, it sees a context window containing its system prompt, recent message history, and any injected context. The context window is finite; even models with large token limits perform worse when the window is full. This causes two problems:
+
+- **Context rot**: the more raw message history an agent carries, the worse it performs.
+- **Context waste**: most of that history contains tokens no longer needed to keep the agent on task.
+
+OM solves both problems by compressing old context into dense observations.
+
+### Observations
+
+When message history tokens exceed a threshold (default: 30,000), the Observer creates observations which are concise notes about what happened:
+
+OM uses fast local token estimation for this thresholding work. Text is estimated with `tokenx`, while image parts use provider-aware heuristics so multimodal conversations still trigger observation at the right time. The same applies to image-like `file` parts when a transport normalizes an uploaded image as a file instead of an image part. For example, OpenAI image detail settings can materially change when OM decides to observe.
+
+The Observer can also see attachments in the history it reviews. OM keeps readable placeholders like `[Image #1: reference-board.png]` or `[File #1: floorplan.pdf]` in the transcript for readability, and forwards the actual attachment parts alongside the text. Image-like `file` parts are upgraded to image inputs for the Observer when possible, while non-image attachments are forwarded as file parts with normalized token counting. This applies to both normal thread observation and batched resource-scope observation.
+
+```md
+Date: 2026-01-15
+
+- 🔴 12:10 User is building a Next.js app with Supabase auth, due in 1 week (meaning January 22nd 2026)
+  - 🔴 12:10 App uses server components with client-side hydration
+  - 🟡 12:12 User asked about middleware configuration for protected routes
+  - 🔴 12:15 User stated the app name is "Acme Dashboard"
+```
+
+The compression is typically 5–40×. The Observer also tracks a **current task** and **suggested response** so the agent picks up where it left off.
+
+If you enable `observation.threadTitle`, the Observer can also suggest a short thread title when the conversation topic meaningfully changes. Thread title generation is opt-in and updates the thread metadata, so apps like Mastra Code can show the latest title in thread lists and status UI.
+
+Example: An agent using Playwright MCP might see 50,000+ tokens per page snapshot. With OM, the Observer watches the interaction and creates a few hundred tokens of observations about what was on the page and what actions were taken. The agent stays on task without carrying every raw snapshot.
+
+### Reflections
+
+When observations exceed their threshold (default: 40,000 tokens), the Reflector condenses them, combines related items, and reflects on patterns.
+
+The result is a three-tier system:
+
+1. **Recent messages**: Exact conversation history for the current task
+2. **Observations**: A log of what the Observer has seen
+3. **Reflections**: Condensed observations when memory becomes too long
+
+### Retrieval mode (experimental)
+
+> **Note:** Retrieval mode is experimental. The API may change in future releases.
+
+Normal OM compresses messages into observations, which is great for staying on task, but the original wording is gone. Retrieval mode fixes this by keeping each observation group linked to the raw messages that produced it. When the agent needs exact wording, tool output, or chronology that the summary compressed away, it can call a `recall` tool to page through the source messages.
+
+#### Browsing only
+
+Set `retrieval: true` to enable the recall tool for browsing raw messages. No vector store needed. By default, the recall tool can browse across all threads for the current resource.
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      retrieval: true,
+    },
+  },
+})
+```
+
+#### With semantic search
+
+Set `retrieval: { vector: true }` to also enable semantic search. This reuses the vector store and embedder already configured on your Memory instance:
+
+```typescript
+const memory = new Memory({
+  storage,
+  vector: myVectorStore,
+  embedder: myEmbedder,
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      retrieval: { vector: true },
+    },
+  },
+})
+```
+
+When vector search is configured, new observation groups are automatically indexed at buffer time and during synchronous observation (fire-and-forget, non-blocking). Semantic search returns observation-group matches with their raw source message ID ranges, so the recall tool can show the summarized memory alongside where it came from.
+
+#### Restricting to the current thread
+
+By default, the recall tool scope is `'resource'` — the agent can list threads, browse other threads, and search across all conversations. Set `scope: 'thread'` to restrict the agent to only the current thread:
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      retrieval: { vector: true, scope: 'thread' },
+    },
+  },
+})
+```
+
+#### What retrieval enables
+
+With retrieval mode enabled, OM:
+
+- Stores a `range` (e.g. `startId:endId`) on each observation group pointing to the messages it was derived from
+
+- Keeps range metadata visible in the agent's context so the agent knows which observations map to which messages
+
+- Registers a `recall` tool the agent can call to:
+
+  - Page through the raw messages behind any observation group range
+  - Search by semantic similarity (`mode: "search"` with a `query` string); requires `vector: true`
+  - List all threads (`mode: "threads"`), browse other threads (`threadId`), and search across all threads (default `scope: 'resource'`)
+  - When `scope: 'thread'`: restrict browsing and search to the current thread only
+
+See the [recall tool reference](https://mastra.ai/reference/memory/observational-memory) for the full API (detail levels, part indexing, pagination, cross-thread browsing, and token limiting).
+
+## Studio
+
+To see how it works in practice, open [Studio](https://mastra.ai/docs/studio/overview) and navigate to an agent with OM enabled. The **Memory** tab displays:
+
+- **Token progress bars**: Current token counts for messages and observations, showing how close each is to its threshold. Hover over the info icon to see the model and threshold for the Observer and Reflector.
+- **Active observations**: The current observation log, rendered inline. When previous observation or reflection records exist, expand "Previous observations" to browse them.
+- **Background processing**: During a conversation, buffered observation chunks and reflection status appear as the agent processes in the background.
+
+The progress bars update live while the agent is observing or reflecting, showing elapsed time and a status badge.
+
+## Models
+
+The Observer and Reflector run in the background. Any model that works with Mastra's [model routing](https://mastra.ai/models) (`provider/model`) can be used. When using `observationalMemory: true`, the default model is `google/gemini-2.5-flash`. When passing a config object, a `model` must be explicitly set.
+
+Generally speaking, we recommend using a model that has a large context window (128K+ tokens) and is fast enough to run in the background without slowing down your actions.
+
+If you're unsure which model to use, start with the default `google/gemini-2.5-flash`. We've also successfully tested `openai/gpt-5-mini`, `anthropic/claude-haiku-4-5`, `deepseek/deepseek-reasoner`, `qwen3`, and `glm-4.7`.
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'deepseek/deepseek-reasoner',
+    },
+  },
+})
+```
+
+See [model configuration](https://mastra.ai/reference/memory/observational-memory) for using different models per agent.
+
+### Token-tiered model selection
+
+**Added in:** `@mastra/memory@1.10.0`
+
+You can use `ModelByInputTokens` to specify different Observer or Reflector models based on input token count. OM selects the matching model tier at runtime from the configured `upTo` thresholds.
+
+```typescript
+import { Memory, ModelByInputTokens } from '@mastra/memory'
+
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      observation: {
+        model: new ModelByInputTokens({
+          upTo: {
+            // Faster, cheaper models for smaller inputs; stronger models for larger contexts
+            5_000: 'openrouter/mistralai/ministral-8b-2512',
+            20_000: 'openrouter/mistralai/mistral-small-2603',
+            40_000: 'openai/gpt-5.4-mini',
+            1_000_000: 'google/gemini-3.1-flash-lite-preview',
+          },
+        }),
+      },
+      reflection: {
+        model: new ModelByInputTokens({
+          upTo: {
+            20_000: 'openai/gpt-5.4-mini',
+            100_000: 'google/gemini-2.5-flash',
+          },
+        }),
+      },
+    },
+  },
+})
+```
+
+The `upTo` keys are inclusive upper bounds. OM computes the actual input token count for the Observer or Reflector call, resolves the matching tier directly, and uses that concrete model for the run.
+
+If the input exceeds the largest configured threshold, an error is thrown — ensure your thresholds cover the full range of possible input sizes, or use a model with a sufficiently large context window at the highest tier.
+
+## Scopes
+
+### Thread scope (default)
+
+Each thread has its own observations. This scope is well tested and works well as a general purpose memory system, especially for long horizon agentic use-cases.
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      scope: 'thread',
+    },
+  },
+})
+```
+
+Thread scope requires a valid `threadId` to be provided when calling the agent. If `threadId` is missing, Observational Memory throws an error. This prevents multiple threads from silently sharing a single observation record, which can cause database deadlocks.
+
+### Resource scope (experimental)
+
+Observations are shared across all threads for a resource (typically a user). Enables cross-conversation memory.
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      scope: 'resource',
+    },
+  },
+})
+```
+
+Resource scope works, however it's marked as experimental for now until we prove task adherence/continuity across multiple ongoing simultaneous threads. As of today, you may need to tweak your system prompt to prevent one thread from continuing the work that another had already started (but hadn't finished).
+
+This is because in resource scope, each thread is a perspective on _all_ threads for the resource.
+
+For your use-case this may not be a problem, so your mileage may vary.
+
+> **Warning:** In resource scope, unobserved messages across _all_ threads are processed together. For users with many existing threads, this can be slow. Use thread scope for existing apps.
+
+## Token budgets
+
+OM uses token thresholds to decide when to observe and reflect. See [token budget configuration](https://mastra.ai/reference/memory/observational-memory) for details.
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      observation: {
+        // when to run the Observer (default: 30,000)
+        messageTokens: 30_000,
+      },
+      reflection: {
+        // when to run the Reflector (default: 40,000)
+        observationTokens: 40_000,
+      },
+      // let message history borrow from observation budget
+      // requires bufferTokens: false (temporary limitation)
+      shareTokenBudget: false,
+    },
+  },
+})
+```
+
+### Token counting cache
+
+OM caches token estimates in message metadata to reduce repeat counting work during threshold checks and buffering decisions.
+
+- Per-part estimates are stored on `part.providerMetadata.mastra` and reused on subsequent passes when the cache version/tokenizer source matches.
+- For string-only message content (without parts), OM uses a message-level metadata fallback cache.
+- Message and conversation overhead are still recalculated on every pass. The cache only stores payload estimates, so counting semantics stay the same.
+- `data-*` and `reasoning` parts are still skipped and aren't cached.
+
+## Async buffering
+
+Without async buffering, the Observer runs synchronously when the message threshold is reached — the agent pauses mid-conversation while the Observer LLM call completes. With async buffering (enabled by default), observations are pre-computed in the background as the conversation grows. When the threshold is hit, buffered observations activate instantly with no pause.
+
+### How it works
+
+As the agent converses, message tokens accumulate. At regular intervals (`bufferTokens`), a background Observer call runs without blocking the agent. Each call produces a "chunk" of observations that's stored in a buffer.
+
+When message tokens reach the `messageTokens` threshold, buffered chunks activate: their observations move into the active observation log, and the corresponding raw messages are removed from the context window. The agent never pauses.
+
+Buffered observations also include continuation hints — a suggested next response and the current task — so the main agent maintains conversational continuity after activation shrinks the context window.
+
+If the agent produces messages faster than the Observer can process them, a `blockAfter` safety threshold forces a synchronous observation as a last resort. Buffered activation still preserves a minimum remaining context (the smaller of \~1k tokens or the configured retention floor).
+
+Reflection works similarly — the Reflector runs in the background when observations reach a fraction of the reflection threshold.
+
+### Settings
+
+| Setting                        | Default | What it controls                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `observation.bufferTokens`     | `0.2`   | How often to buffer. `0.2` means every 20% of `messageTokens` — with the default 30k threshold, that's roughly every 6k tokens. Can also be an absolute token count (e.g. `5000`).                                                                                                                                                     |
+| `observation.bufferActivation` | `0.8`   | How aggressively to clear the message window on activation. `0.8` means remove enough messages to keep only 20% of `messageTokens` remaining. Lower values keep more message history.                                                                                                                                                  |
+| `observation.blockAfter`       | `1.2`   | Safety threshold as a multiplier of `messageTokens`. At `1.2`, synchronous observation is forced at 36k tokens (1.2 × 30k). Only matters if buffering can't keep up.                                                                                                                                                                   |
+| `activateAfterIdle`            | none    | Forces buffered observations and buffered reflections to activate after a period of inactivity, even if their token thresholds have not been reached yet. Accepts milliseconds or duration strings like `300_000`, `"5m"`, or `"1hr"`. Set this to your prompt cache TTL if you want activation to happen before the next cold prompt. |
+| `activateOnProviderChange`     | `false` | Forces buffered observations and reflections to activate when the next step uses a different `provider/model` than the one that produced the latest assistant step. Use this when switching providers or models would invalidate prompt cache reuse.                                                                                   |
+| `reflection.bufferActivation`  | `0.5`   | When to start background reflection. `0.5` means reflection begins when observations reach 50% of the `observationTokens` threshold.                                                                                                                                                                                                   |
+| `reflection.blockAfter`        | `1.2`   | Safety threshold for reflection, same logic as observation.                                                                                                                                                                                                                                                                            |
+
+If you're relying on prompt caching, set `activateAfterIdle` to match your cache TTL. That way, once a thread has been idle long enough for the cache to expire, the next request can activate buffered observations or reflections first and send a smaller compressed context window.
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      activateAfterIdle: '5m',
+      activateOnProviderChange: true,
+    },
+  },
+})
+```
+
+With a 5-minute prompt cache TTL, this activates buffered context after 5 minutes of inactivity so the next uncached prompt uses observations and reflections instead of a larger raw message window. If you prefer, `300_000` works the same way.
+
+Changing model or providers mid-thread will invalidate the prompt cache. If your agent can switch between providers or models mid-thread, `activateOnProviderChange: true` forces buffered context to activate before the new provider runs. That avoids sending a large raw window to a provider that cannot reuse the previous prompt cache.
+
+### Disabling
+
+To disable async buffering and use synchronous observation/reflection instead:
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      observation: {
+        bufferTokens: false,
+      },
+    },
+  },
+})
+```
+
+Setting `bufferTokens: false` disables both observation and reflection async buffering. See [async buffering configuration](https://mastra.ai/reference/memory/observational-memory) for the full API.
+
+> **Note:** Async buffering isn't supported with `scope: 'resource'`. It's automatically disabled in resource scope.
+
+## Observer Context Optimization
+
+By default, the Observer receives the full observation history as context when processing new messages. The Observer also receives prior `current-task` and `suggested-response` metadata (when available), so it can stay oriented even when observation context is truncated. For long-running conversations where observations grow large, you can opt into context optimization to reduce Observer input costs.
+
+Set `observation.previousObserverTokens` to limit how many tokens of previous observations are sent to the Observer. Observations are tail-truncated, keeping the most recent entries. When a buffered reflection is pending, the already-reflected lines are automatically replaced with the reflection summary before truncation is applied.
+
+```typescript
+const memory = new Memory({
+  options: {
+    observationalMemory: {
+      model: 'google/gemini-2.5-flash',
+      observation: {
+        previousObserverTokens: 10_000, // keep only ~10k tokens of recent observations
+      },
+    },
+  },
+})
+```
+
+- `previousObserverTokens: 2000` → default; keeps \~2k tokens of recent observations.
+- `previousObserverTokens: 0` → omit previous observations completely.
+- `previousObserverTokens: false` → disable truncation and keep full previous observations.
+
+## Migrating existing threads
+
+No manual migration needed. OM reads existing messages and observes them lazily when thresholds are exceeded.
+
+- **Thread scope**: The first time a thread exceeds `observation.messageTokens`, the Observer processes the backlog.
+- **Resource scope**: All unobserved messages across all threads for a resource are processed together. For users with many existing threads, this could take significant time.
+
+## Comparing OM with other memory features
+
+- **[Message history](https://mastra.ai/docs/memory/message-history)**: High-fidelity record of the current conversation
+- **[Working memory](https://mastra.ai/docs/memory/working-memory)**: Small, structured state (JSON or markdown) for user preferences, names, goals
+- **[Semantic Recall](https://mastra.ai/docs/memory/semantic-recall)**: RAG-based retrieval of relevant past messages
+
+If you're using working memory to store conversation summaries or ongoing state that grows over time, OM is a better fit. Working memory is for small, structured data; OM is for long-running event logs. OM also manages message history automatically—the `messageTokens` setting controls how much raw history remains before observation runs.
+
+In practical terms, OM replaces both working memory and message history, and has greater accuracy (and lower cost) than Semantic Recall.
+
+## Related
+
+- [Observational Memory Reference](https://mastra.ai/reference/memory/observational-memory)
+- [Memory Overview](https://mastra.ai/docs/memory/overview)
+- [Message History](https://mastra.ai/docs/memory/message-history)
+- [Memory Processors](https://mastra.ai/docs/memory/memory-processors)
+
+
+
+# Storage
+
+For agents to remember previous interactions, Mastra needs a storage adapter. Use one of the [supported providers](#supported-providers) and pass it to your Mastra instance.
+
+```typescript
+import { Mastra } from '@mastra/core'
+import { LibSQLStore } from '@mastra/libsql'
+
+export const mastra = new Mastra({
+  storage: new LibSQLStore({
+    id: 'mastra-storage',
+    url: 'file:./mastra.db',
+  }),
+})
+```
+
+> **Sharing the database with Studio:** When running `mastra dev` alongside your application (e.g., Next.js), use an absolute path to ensure both processes access the same database:
+>
+> ```typescript
+> url: 'file:/absolute/path/to/your/project/mastra.db'
+> ```
+>
+> Relative paths like `file:./mastra.db` resolve based on each process's working directory, which may differ.
+
+This configures instance-level storage, which all agents share by default. You can also configure [agent-level storage](#agent-level-storage) for isolated data boundaries.
+
+Mastra automatically initializes the necessary storage structures on first interaction. See [Storage Overview](https://mastra.ai/reference/storage/overview) for domain coverage and the schema used by the built-in database-backed domains.
+
+## Supported providers
+
+Each provider page includes installation instructions, configuration parameters, and usage examples:
+
+- [libSQL](https://mastra.ai/reference/storage/libsql)
+- [PostgreSQL](https://mastra.ai/reference/storage/postgresql)
+- [MongoDB](https://mastra.ai/reference/storage/mongodb)
+- [Upstash](https://mastra.ai/reference/storage/upstash)
+- [Redis](https://mastra.ai/reference/storage/redis)
+- [Cloudflare D1](https://mastra.ai/reference/storage/cloudflare-d1)
+- [Cloudflare KV & Durable Objects](https://mastra.ai/reference/storage/cloudflare)
+- [Convex](https://mastra.ai/reference/storage/convex)
+- [DynamoDB](https://mastra.ai/reference/storage/dynamodb)
+- [LanceDB](https://mastra.ai/reference/storage/lance)
+- [Microsoft SQL Server](https://mastra.ai/reference/storage/mssql)
+
+> **Tip:** libSQL is the easiest way to get started because it doesn’t require running a separate database server.
+
+## Configuration scope
+
+Storage can be configured at the instance level (shared by all agents) or at the agent level (isolated to a specific agent).
+
+### Instance-level storage
+
+Add storage to your Mastra instance so all agents, workflows, observability traces, and scores share the same storage backend:
+
+```typescript
+import { Mastra } from '@mastra/core'
+import { PostgresStore } from '@mastra/pg'
+
+export const mastra = new Mastra({
+  storage: new PostgresStore({
+    id: 'mastra-storage',
+    connectionString: process.env.DATABASE_URL,
+  }),
+})
+
+// Both agents inherit storage from the Mastra instance above
+const agent1 = new Agent({ id: 'agent-1', memory: new Memory() })
+const agent2 = new Agent({ id: 'agent-2', memory: new Memory() })
+```
+
+This is useful when all primitives share the same storage backend and have similar performance, scaling, and operational requirements.
+
+#### Composite storage
+
+[Composite storage](https://mastra.ai/reference/storage/composite) is an alternative way to configure instance-level storage. Use `MastraCompositeStore` to route `memory` and any other [supported domains](https://mastra.ai/reference/storage/composite) to different storage providers.
+
+```typescript
+import { Mastra } from '@mastra/core'
+import { MastraCompositeStore } from '@mastra/core/storage'
+import { MemoryLibSQL } from '@mastra/libsql'
+import { WorkflowsPG } from '@mastra/pg'
+import { ObservabilityStorageClickhouse } from '@mastra/clickhouse'
+
+export const mastra = new Mastra({
+  storage: new MastraCompositeStore({
+    id: 'composite',
+    domains: {
+      memory: new MemoryLibSQL({ url: 'file:./memory.db' }),
+      workflows: new WorkflowsPG({ connectionString: process.env.DATABASE_URL }),
+      observability: new ObservabilityStorageClickhouse({
+        url: process.env.CLICKHOUSE_URL,
+        username: process.env.CLICKHOUSE_USERNAME,
+        password: process.env.CLICKHOUSE_PASSWORD,
+      }),
+    },
+  }),
+})
+```
+
+This is useful when different types of data have different performance or operational requirements, such as low-latency storage for memory, durable storage for workflows, and high-throughput storage for observability.
+
+### Agent-level storage
+
+Agent-level storage overrides storage configured at the instance level. Add storage to a specific agent when you need to keep data separate or use different providers per agent.
+
+```typescript
+import { Agent } from '@mastra/core/agent'
+import { Memory } from '@mastra/memory'
+import { PostgresStore } from '@mastra/pg'
+
+export const agent = new Agent({
+  id: 'agent',
+  memory: new Memory({
+    storage: new PostgresStore({
+      id: 'agent-storage',
+      connectionString: process.env.AGENT_DATABASE_URL,
+    }),
+  }),
+})
+```
+
+## Threads and resources
+
+Mastra organizes conversations using two identifiers:
+
+- **Thread**: A conversation session containing a sequence of messages.
+- **Resource**: The entity that owns the thread, such as a user, organization, project, or any other domain entity in your application.
+
+Both identifiers are required for agents to store information:
+
+**.generate()**:
+
+```typescript
+const response = await agent.generate('hello', {
+  memory: {
+    thread: 'conversation-abc-123',
+    resource: 'user_123',
+  },
+})
+```
+
+**.stream()**:
+
+```typescript
+const stream = await agent.stream('hello', {
+  memory: {
+    thread: 'conversation-abc-123',
+    resource: 'user_123',
+  },
+})
+```
+
+> **Note:** [Studio](https://mastra.ai/docs/studio/overview) automatically generates a thread and resource ID for you. When calling `stream()` or `generate()` yourself, remember to provide these identifiers explicitly.
+
+### Thread title generation
+
+Mastra can automatically generate descriptive thread titles based on the user's first message when `generateTitle` is enabled.
+
+Use this option when implementing a ChatGPT-style chat interface to render a title alongside each thread in the conversation list (for example, in a sidebar) derived from the thread’s initial user message.
+
+```typescript
+export const agent = new Agent({
+  id: 'agent',
+  memory: new Memory({
+    options: {
+      generateTitle: true,
+    },
+  }),
+})
+```
+
+Title generation runs asynchronously after the agent responds and doesn't affect response time.
+
+To optimize cost or behavior, provide a smaller [`model`](https://mastra.ai/models) and custom `instructions`:
+
+```typescript
+export const agent = new Agent({
+  id: 'agent',
+  memory: new Memory({
+    options: {
+      generateTitle: {
+        model: 'openai/gpt-5-mini',
+        instructions: 'Generate a 1 word title',
+      },
+    },
+  }),
+})
+```
+
+## Semantic recall
+
+Semantic recall has different storage requirements - it needs a vector database in addition to the standard storage adapter. See [Semantic recall](https://mastra.ai/docs/memory/semantic-recall) for setup and supported vector providers.
+
+## Handling large attachments
+
+Some storage providers enforce record size limits that base64-encoded file attachments (such as images) can exceed:
+
+| Provider                                                           | Record size limit |
+| ------------------------------------------------------------------ | ----------------- |
+| [DynamoDB](https://mastra.ai/reference/storage/dynamodb)           | 400 KB            |
+| [Convex](https://mastra.ai/reference/storage/convex)               | 1 MiB             |
+| [Cloudflare D1](https://mastra.ai/reference/storage/cloudflare-d1) | 1 MiB             |
+
+PostgreSQL, MongoDB, and libSQL have higher limits and are generally unaffected.
+
+To avoid this, use an input processor to upload attachments to external storage (S3, R2, GCS, [Convex file storage](https://docs.convex.dev/file-storage), etc.) and replace them with URL references before persistence.
+
+```typescript
+import type { Processor } from '@mastra/core/processors'
+import type { MastraDBMessage } from '@mastra/core/memory'
+
+export class AttachmentUploader implements Processor {
+  id = 'attachment-uploader'
+
+  async processInput({ messages }: { messages: MastraDBMessage[] }) {
+    return Promise.all(messages.map(msg => this.processMessage(msg)))
+  }
+
+  async processMessage(msg: MastraDBMessage) {
+    const attachments = msg.content.experimental_attachments
+    if (!attachments?.length) return msg
+
+    const uploaded = await Promise.all(
+      attachments.map(async att => {
+        // Skip if already a URL
+        if (!att.url?.startsWith('data:')) return att
+
+        // Upload base64 data and replace with URL
+        const url = await this.upload(att.url, att.contentType)
+        return { ...att, url }
+      }),
+    )
+
+    return { ...msg, content: { ...msg.content, experimental_attachments: uploaded } }
+  }
+
+  async upload(dataUri: string, contentType?: string): Promise<string> {
+    const base64 = dataUri.split(',')[1]
+    const buffer = Buffer.from(base64, 'base64')
+
+    // Replace with your storage provider (S3, R2, GCS, Convex, etc.)
+    // return await s3.upload(buffer, contentType);
+    throw new Error('Implement upload() with your storage provider')
+  }
+}
+```
+
+Use the processor with your agent:
+
+```typescript
+import { Agent } from '@mastra/core/agent'
+import { Memory } from '@mastra/memory'
+import { AttachmentUploader } from './processors/attachment-uploader'
+
+const agent = new Agent({
+  id: 'my-agent',
+  memory: new Memory({ storage: yourStorage }),
+  inputProcessors: [new AttachmentUploader()],
+})
+```
+
+
+
+
+# Project structure
+
+Your new Mastra project, created with the `create mastra` command, comes with a predefined set of files and folders to help you get started.
+
+Mastra is a framework, but it's **unopinionated** about how you organize or colocate your files. The CLI provides a sensible default structure that works well for most projects, but you're free to adapt it to your workflow or team conventions. You could even build your entire project in a single file if you wanted! Whatever structure you choose, keep it consistent to ensure your code stays maintainable and straightforward to navigate.
+
+## Default project structure
+
+A project created with the `create mastra` command looks like this:
+
+```text
+src/
+├── mastra/
+│   ├── agents/
+│   │   └── weather-agent.ts
+│   ├── tools/
+│   │   └── weather-tool.ts
+│   ├── workflows/
+│   │   └── weather-workflow.ts
+│   ├── scorers/
+│   │   └── weather-scorer.ts
+│   └── index.ts
+├── .env.example
+├── package.json
+└── tsconfig.json
+```
+
+> **Tip:** Use the predefined files as templates. Duplicate and adapt them to quickly create your own agents, tools, workflows, etc.
+
+### Folders
+
+Folders organize your agent's resources, like agents, tools, and workflows.
+
+| Folder                 | Description                                                                                                                              |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/mastra`           | Entry point for all Mastra-related code and configuration.                                                                               |
+| `src/mastra/agents`    | Define and configure your agents - their behavior, goals, and tools.                                                                     |
+| `src/mastra/workflows` | Define multi-step workflows that orchestrate agents and tools together.                                                                  |
+| `src/mastra/tools`     | Create reusable tools that your agents can call                                                                                          |
+| `src/mastra/mcp`       | (Optional) Implement custom MCP servers to share your tools with external agents                                                         |
+| `src/mastra/scorers`   | (Optional) Define scorers for evaluating agent performance over time                                                                     |
+| `src/mastra/public`    | (Optional) Contents are copied into the `.build/output` directory during the build process, making them available for serving at runtime |
+
+### Top-level files
+
+Top-level files define how your Mastra project is configured, built, and connected to its environment.
+
+| File                  | Description                                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `src/mastra/index.ts` | Central entry point where you configure and initialize Mastra.                                                                     |
+| `.env.example`        | Template for environment variables - copy and rename to `.env` to add your secret [model provider](https://mastra.ai/models) keys. |
+| `package.json`        | Defines project metadata, dependencies, and available npm scripts.                                                                 |
+| `tsconfig.json`       | Configures TypeScript options such as path aliases, compiler settings, and build output.                                           |
+
+## Next steps
+
+- Read more about [Mastra's features](https://mastra.ai/docs).
+- Integrate Mastra with your frontend framework: [Next.js](https://mastra.ai/guides/getting-started/next-js), [React](https://mastra.ai/guides/getting-started/vite-react), or [Astro](https://mastra.ai/guides/getting-started/astro).
+- Build an agent from scratch following one of our [guides](https://mastra.ai/guides).
+- Watch conceptual guides on our [YouTube channel](https://www.youtube.com/@mastra-ai) and [subscribe](https://www.youtube.com/@mastra-ai?sub_confirmation=1)!
+
+
+
+
+
+# Tracing
+
+Tracing provides specialized monitoring and debugging for the AI-related operations in your application. When enabled, Mastra automatically creates traces for agent runs, LLM generations, tool calls, and workflow steps with AI-specific context and metadata.
+
+Unlike traditional application tracing, Tracing focuses specifically on understanding your AI pipeline — capturing token usage, model parameters, tool execution details, and conversation flows. This makes it easier to debug issues, optimize performance, and understand how your AI systems behave in production.
+
+## How it works
+
+Traces are created by:
+
+- **Configure exporters** → send trace data to observability platforms
+- **Set sampling strategies** → control which traces are collected
+- **Run agents and workflows** → Mastra auto-instruments them with Tracing
+
+## Configuration
+
+### Basic Config
+
+```ts
+import { Mastra } from '@mastra/core'
+import {
+  Observability,
+  DefaultExporter,
+  CloudExporter,
+  SensitiveDataFilter,
+} from '@mastra/observability'
+
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      default: {
+        serviceName: 'mastra',
+        exporters: [
+          new DefaultExporter(), // Persists traces to storage for Studio
+          new CloudExporter(), // Sends observability data to hosted Mastra Studio (if MASTRA_CLOUD_ACCESS_TOKEN is set)
+        ],
+        spanOutputProcessors: [
+          new SensitiveDataFilter(), // Redacts sensitive data like passwords, tokens, keys
+        ],
+      },
+    },
+  }),
+  storage: new LibSQLStore({
+    id: 'mastra-storage',
+    url: 'file:./mastra.db', // Storage is required for tracing
+  }),
+})
+```
+
+This configuration includes:
+
+- **Service Name**: `"mastra"` - identifies your service in traces
+
+- **Sampling**: `"always"` by default (100% of traces)
+
+- **Exporters**:
+
+  - `DefaultExporter` - Persists traces to your configured storage for Studio
+  - `CloudExporter` - Sends observability data to hosted Mastra Studio (requires `MASTRA_CLOUD_ACCESS_TOKEN`)
+
+- **Span Output Processors**: `SensitiveDataFilter` - Redacts sensitive fields
+
+## Exporters
+
+Exporters determine where your trace data is sent and how it's stored. They integrate with your existing observability stack, support data residency requirements, and can be optimized for cost and performance. You can use multiple exporters simultaneously to send the same trace data to different destinations — for example, storing detailed traces locally for debugging while sending sampled data to a cloud provider for production monitoring.
+
+### Internal Exporters
+
+Mastra provides two built-in exporters:
+
+- **[Default](https://mastra.ai/docs/observability/tracing/exporters/default)** - Persists traces to local storage for viewing in Studio
+- **[Cloud](https://mastra.ai/docs/observability/tracing/exporters/cloud)** - Sends observability data to hosted Mastra Studio for production monitoring and collaboration
+
+### External Exporters
+
+In addition to the internal exporters, Mastra supports integration with popular observability platforms. These exporters allow you to leverage your existing monitoring infrastructure and take advantage of platform-specific features like alerting, dashboards, and correlation with other application metrics.
+
+- **[Arize](https://mastra.ai/docs/observability/tracing/exporters/arize)** - Exports traces to Arize Phoenix or Arize AX using OpenInference semantic conventions
+- **[Braintrust](https://mastra.ai/docs/observability/tracing/exporters/braintrust)** - Exports traces to Braintrust's eval and observability platform
+- **[Datadog](https://mastra.ai/docs/observability/tracing/exporters/datadog)** - Sends traces to Datadog APM via OTLP for full-stack observability with AI tracing
+- **[Laminar](https://mastra.ai/docs/observability/tracing/exporters/laminar)** - Sends traces to Laminar via OTLP/HTTP (protobuf) with Laminar-native span attributes + scorer support
+- **[Langfuse](https://mastra.ai/docs/observability/tracing/exporters/langfuse)** - Sends traces to the Langfuse open-source LLM engineering platform
+- **[LangSmith](https://mastra.ai/docs/observability/tracing/exporters/langsmith)** - Pushes traces into LangSmith's observability and evaluation toolkit
+- **[PostHog](https://mastra.ai/docs/observability/tracing/exporters/posthog)** - Sends traces to PostHog for AI analytics and product insights
+- **[Sentry](https://mastra.ai/docs/observability/tracing/exporters/sentry)** - Sends traces to Sentry for AI tracing and monitoring using OpenTelemetry semantic conventions
+- **[OpenTelemetry](https://mastra.ai/docs/observability/tracing/exporters/otel)** - Deliver traces to any OpenTelemetry-compatible observability system
+  - Supports: Dash0, MLflow, New Relic, SigNoz, Traceloop, Zipkin, and others!
+
+## Bridges
+
+Bridges provide bidirectional integration with external tracing systems. Unlike exporters that send trace data to external platforms, bridges create native spans in external systems and inherit context from them. This enables Mastra operations to participate in existing distributed traces.
+
+- **[OpenTelemetry Bridge](https://mastra.ai/docs/observability/tracing/bridges/otel)** - Integrate with existing OpenTelemetry infrastructure
+
+### Bridges vs Exporters
+
+| Feature                                  | Bridges                      | Exporters                 |
+| ---------------------------------------- | ---------------------------- | ------------------------- |
+| Creates native spans in external systems | Yes                          | No                        |
+| Inherits context from external systems   | Yes                          | No                        |
+| Sends data to backends                   | Via external SDK             | Directly                  |
+| Use case                                 | Existing distributed tracing | Standalone Mastra tracing |
+
+You can use both together — a bridge for context propagation and exporters to send traces to additional destinations.
+
+## Sampling strategies
+
+Sampling allows you to control which traces are collected, helping you balance between observability needs and resource costs. In production environments with high traffic, collecting every trace can be expensive and unnecessary. Sampling strategies let you capture a representative subset of traces while ensuring you don't miss critical information about errors or important operations.
+
+Mastra supports four sampling strategies:
+
+### Always Sample
+
+Collects 100% of traces. Best for development, debugging, or low-traffic scenarios where you need complete visibility.
+
+```ts
+sampling: {
+  type: 'always'
+}
+```
+
+### Never Sample
+
+Disables tracing entirely. Useful for specific environments where tracing adds no value or when you need to temporarily disable tracing without removing configuration.
+
+```ts
+sampling: {
+  type: 'never'
+}
+```
+
+### Ratio-Based Sampling
+
+Randomly samples a percentage of traces. Ideal for production environments where you want statistical insights without the cost of full tracing. The probability value ranges from 0 (no traces) to 1 (all traces).
+
+```ts
+sampling: {
+  type: 'ratio',
+  probability: 0.1  // Sample 10% of traces
+}
+```
+
+### Custom Sampling
+
+Implements your own sampling logic based on request context, metadata, or business rules. Perfect for complex scenarios like sampling based on user tier, request type, or error conditions.
+
+```ts
+sampling: {
+  type: 'custom',
+  sampler: (options) => {
+    // Sample premium users at higher rate
+    if (options?.metadata?.userTier === 'premium') {
+      return Math.random() < 0.5; // 50% sampling
+    }
+
+    // Default 1% sampling for others
+    return Math.random() < 0.01;
+  }
+}
+```
+
+### Complete Example
+
+```ts
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      '10_percent': {
+        serviceName: 'my-service',
+        // Sample 10% of traces
+        sampling: {
+          type: 'ratio',
+          probability: 0.1,
+        },
+        exporters: [new DefaultExporter()],
+      },
+    },
+  }),
+})
+```
+
+## Multi-config setup
+
+Complex applications often require different tracing configurations for different scenarios. You might want detailed traces with full sampling during development, sampled traces sent to external providers in production, and specialized configurations for specific features or customer segments. The `configSelector` function enables dynamic configuration selection at runtime, allowing you to route traces based on request context, environment variables, feature flags, or any custom logic.
+
+This approach is particularly valuable when:
+
+- Running A/B tests with different observability requirements
+- Providing enhanced debugging for specific customers or support cases
+- Gradually rolling out new tracing providers without affecting existing monitoring
+- Optimizing costs by using different sampling rates for different request types
+- Maintaining separate trace streams for compliance or data residency requirements
+
+> **Info:** Note that only a single config can be used for a specific execution. But a single config can send data to multiple exporters simultaneously.
+
+### Dynamic Configuration Selection
+
+Use `configSelector` to choose the appropriate tracing configuration based on request context:
+
+```ts
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      langfuse: {
+        serviceName: 'langfuse-service',
+        exporters: [langfuseExporter],
+      },
+      braintrust: {
+        serviceName: 'braintrust-service',
+        exporters: [braintrustExporter],
+      },
+      debug: {
+        serviceName: 'debug-service',
+        sampling: { type: 'always' },
+        exporters: [new DefaultExporter()],
+      },
+    },
+    configSelector: (context, availableTracers) => {
+      // Use debug config for support requests
+      if (context.requestContext?.get('supportMode')) {
+        return 'debug'
+      }
+
+      // Route specific customers to different providers
+      const customerId = context.requestContext?.get('customerId')
+      if (customerId && premiumCustomers.includes(customerId)) {
+        return 'braintrust'
+      }
+
+      // Route specific requests to langfuse
+      if (context.requestContext?.get('useExternalTracing')) {
+        return 'langfuse'
+      }
+
+      throw new Error('no config found')
+    },
+  }),
+})
+```
+
+### Environment-Based Configuration
+
+A common pattern is to select configurations based on deployment environment:
+
+```ts
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      development: {
+        serviceName: 'my-service-dev',
+        sampling: { type: 'always' },
+        exporters: [new DefaultExporter()],
+      },
+      staging: {
+        serviceName: 'my-service-staging',
+        sampling: { type: 'ratio', probability: 0.5 },
+        exporters: [langfuseExporter],
+      },
+      production: {
+        serviceName: 'my-service-prod',
+        sampling: { type: 'ratio', probability: 0.01 },
+        exporters: [cloudExporter, langfuseExporter],
+      },
+    },
+    configSelector: (context, availableTracers) => {
+      const env = process.env.NODE_ENV || 'development'
+      return env
+    },
+  }),
+})
+```
+
+### Common Configuration Patterns & Troubleshooting
+
+#### Maintaining Studio access
+
+When adding external exporters, include `DefaultExporter` and `CloudExporter` to maintain access to Studio:
+
+```ts
+import {
+  Observability,
+  DefaultExporter,
+  CloudExporter,
+  SensitiveDataFilter,
+} from '@mastra/observability'
+import { ArizeExporter } from '@mastra/arize'
+
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      production: {
+        serviceName: 'my-service',
+        exporters: [
+          new ArizeExporter({
+            endpoint: process.env.PHOENIX_ENDPOINT,
+            apiKey: process.env.PHOENIX_API_KEY,
+          }),
+          new DefaultExporter(), // Keep Studio access
+          new CloudExporter(), // Keep Cloud access
+        ],
+        spanOutputProcessors: [new SensitiveDataFilter()],
+      },
+    },
+  }),
+})
+```
+
+This configuration sends traces to all three destinations simultaneously:
+
+- **Arize Phoenix/AX** for external observability
+- **DefaultExporter** for Studio
+- **CloudExporter** for hosted Studio dashboard
+
+> **Info:** Remember: A single trace can be sent to multiple exporters. You don't need separate configs for each exporter unless you want different sampling rates or processors.
+
+## Adding custom metadata
+
+Custom metadata allows you to attach additional context to your traces, making it easier to debug issues and understand system behavior in production. Metadata can include business logic details, performance metrics, user context, or any information that helps you understand what happened during execution.
+
+You can add metadata to any span using the tracing context:
+
+```ts
+execute: async (inputData, context) => {
+  const startTime = Date.now()
+  const response = await fetch(inputData.endpoint)
+
+  // Add custom metadata to the current span
+  context?.tracingContext.currentSpan?.update({
+    metadata: {
+      apiStatusCode: response.status,
+      endpoint: inputData.endpoint,
+      responseTimeMs: Date.now() - startTime,
+      userTier: inputData.userTier,
+      region: process.env.AWS_REGION,
+    },
+  })
+
+  return await response.json()
+}
+```
+
+Metadata set here will be shown in all configured exporters.
+
+### Tagging traces with the deployment environment
+
+Set the top-level `environment` field on Mastra to automatically attach the deployment environment to all observability signals without passing `tracingOptions.metadata.environment` on each call.
+
+```ts
+export const mastra = new Mastra({
+  environment: 'production',
+  observability: new Observability({
+    configs: {
+      default: {
+        serviceName: 'my-service',
+        exporters: [new DefaultExporter()],
+      },
+    },
+  }),
+})
+```
+
+If `environment` is not set, Mastra falls back to `process.env.NODE_ENV`. If neither is set, the field is left undefined rather than guessed.
+
+Per-call `tracingOptions.metadata.environment` always takes precedence, so individual calls can still override the value when needed.
+
+### Automatic Metadata from `RequestContext`
+
+Instead of manually adding metadata to each span, you can configure Mastra to automatically extract values from RequestContext and attach them as metadata to all spans in a trace. This is useful for consistently tracking user identifiers, environment information, feature flags, or any request-scoped data across your entire trace.
+
+#### Configuration-Level Extraction
+
+Define which RequestContext keys to extract in your tracing configuration. These keys will be automatically included as metadata for all spans created with this configuration:
+
+```ts
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      default: {
+        serviceName: 'my-service',
+        requestContextKeys: ['userId', 'environment', 'tenantId'],
+        exporters: [new DefaultExporter()],
+      },
+    },
+  }),
+})
+```
+
+Now when you execute agents or workflows with a RequestContext, these values are automatically extracted:
+
+```ts
+const requestContext = new RequestContext()
+requestContext.set('userId', 'user-123')
+requestContext.set('environment', 'production')
+requestContext.set('tenantId', 'tenant-456')
+
+// All spans in this trace automatically get userId, environment, and tenantId metadata
+const result = await agent.generate('Hello', {
+  requestContext,
+})
+```
+
+#### Per-Request Additions
+
+You can add trace-specific keys using `tracingOptions.requestContextKeys`. These are merged with the configuration-level keys:
+
+```ts
+const requestContext = new RequestContext()
+requestContext.set('userId', 'user-123')
+requestContext.set('environment', 'production')
+requestContext.set('experimentId', 'exp-789')
+
+const result = await agent.generate('Hello', {
+  requestContext,
+  tracingOptions: {
+    requestContextKeys: ['experimentId'], // Adds to configured keys
+  },
+})
+
+// All spans now have: userId, environment, AND experimentId
+```
+
+#### Nested Value Extraction
+
+Use dot notation to extract nested values from RequestContext:
+
+```ts
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      default: {
+        requestContextKeys: ['user.id', 'session.data.experimentId'],
+        exporters: [new DefaultExporter()],
+      },
+    },
+  }),
+})
+
+const requestContext = new RequestContext()
+requestContext.set('user', { id: 'user-456', name: 'John Doe' })
+requestContext.set('session', { data: { experimentId: 'exp-999' } })
+
+// Metadata will include: { user: { id: 'user-456' }, session: { data: { experimentId: 'exp-999' } } }
+```
+
+#### How it works
+
+1. **TraceState Computation**: At the start of a trace (root span creation), Mastra computes which keys to extract by merging configuration-level and per-request keys
+2. **Automatic Extraction**: Root spans (agent runs, workflow executions) automatically extract metadata from RequestContext
+3. **Child Span Extraction**: Child spans can also extract metadata if you pass `requestContext` when creating them
+4. **Metadata Precedence**: Explicit metadata passed to span options always takes precedence over extracted metadata
+
+### Adding Tags to Traces
+
+Tags are string labels that help you categorize and filter traces. Unlike metadata (which contains structured key-value data), tags are plain strings designed for quick filtering and organization.
+
+Use `tracingOptions.tags` to add tags when executing agents or workflows:
+
+```ts
+// With agents
+const result = await agent.generate('Hello', {
+  tracingOptions: {
+    tags: ['production', 'experiment-v2', 'user-request'],
+  },
+})
+
+// With workflows
+const run = await mastra.getWorkflow('myWorkflow').createRun()
+const result = await run.start({
+  inputData: { data: 'process this' },
+  tracingOptions: {
+    tags: ['batch-processing', 'priority-high'],
+  },
+})
+```
+
+#### How Tags Work
+
+- **Root span only**: Tags are applied only to the root span of a trace (the agent run or workflow run span)
+
+- **Widely supported**: Tags are supported by most exporters for filtering and searching traces:
+
+  - **Braintrust** - Native `tags` field
+  - **Langfuse** - Native `tags` field on traces
+  - **ArizeExporter** - `tag.tags` OpenInference attribute
+  - **OtelExporter** - `mastra.tags` span attribute
+  - **OtelBridge** - `mastra.tags` span attribute
+
+- **Combinable with metadata**: You can use both `tags` and `metadata` in the same `tracingOptions`
+
+```ts
+const result = await agent.generate([{ role: 'user', content: 'Analyze this' }], {
+  tracingOptions: {
+    tags: ['production', 'analytics'],
+    metadata: { userId: 'user-123', experimentId: 'exp-456' },
+  },
+})
+```
+
+#### Common Tag Patterns
+
+- **Environment**: `"production"`, `"staging"`, `"development"`
+- **Feature flags**: `"feature-x-enabled"`, `"beta-user"`
+- **Request types**: `"user-request"`, `"batch-job"`, `"scheduled-task"`
+- **Priority levels**: `"priority-high"`, `"priority-low"`
+- **Experiments**: `"experiment-v1"`, `"control-group"`, `"treatment-a"`
+
+### Hiding Sensitive Input/Output
+
+When processing sensitive data, you may want to prevent input and output values from being logged to your observability platforms. Use `hideInput` and `hideOutput` in `tracingOptions` to exclude this data from all spans in a trace:
+
+```ts
+// Hide input data (e.g., user credentials, PII)
+const result = await agent.generate([{ role: 'user', content: 'Process this sensitive data' }], {
+  tracingOptions: {
+    hideInput: true, // Input will be hidden from all spans
+  },
+})
+
+// Hide output data (e.g., generated secrets, confidential results)
+const result = await agent.generate([{ role: 'user', content: 'Generate API keys' }], {
+  tracingOptions: {
+    hideOutput: true, // Output will be hidden from all spans
+  },
+})
+
+// Hide both input and output
+const result = await agent.generate([{ role: 'user', content: 'Handle confidential request' }], {
+  tracingOptions: {
+    hideInput: true,
+    hideOutput: true,
+  },
+})
+```
+
+#### How it works
+
+- **Trace-wide effect**: When set on the root span, these options apply to all child spans in the trace (tool calls, model generations, etc.)
+- **Export-time filtering**: The data is still available internally during execution but is excluded when spans are exported to observability platforms
+- **Combinable with other options**: You can use `hideInput`/`hideOutput` alongside `tags`, `metadata`, and other `tracingOptions`
+
+```ts
+const result = await agent.generate([{ role: 'user', content: 'Sensitive operation' }], {
+  tracingOptions: {
+    hideInput: true,
+    hideOutput: true,
+    tags: ['sensitive-operation', 'pii-handling'],
+    metadata: { operationType: 'credential-processing' },
+  },
+})
+```
+
+> **Tip:** For more granular control over sensitive data, consider using the [Sensitive Data Filter](https://mastra.ai/docs/observability/tracing/processors/sensitive-data-filter) processor, which can redact specific fields (like passwords, tokens, and keys) while preserving the rest of the input/output.
+
+#### Child Spans and Metadata Extraction
+
+When creating child spans within tools or workflow steps, you can pass the `requestContext` parameter to enable metadata extraction:
+
+```ts
+execute: async (inputData, context) => {
+  // Create child span WITH requestContext - gets metadata extraction
+  const dbSpan = context?.tracingContext.currentSpan?.createChildSpan({
+    type: 'generic',
+    name: 'database-query',
+    requestContext: context?.requestContext, // Pass to enable metadata extraction
+  })
+
+  const results = await db.query('SELECT * FROM users')
+  dbSpan?.end({ output: results })
+
+  // Or create child span WITHOUT requestContext - no metadata extraction
+  const cacheSpan = context?.tracingContext.currentSpan?.createChildSpan({
+    type: 'generic',
+    name: 'cache-check',
+    // No requestContext - won't extract metadata
+  })
+
+  return results
+}
+```
+
+This gives you fine-grained control over which child spans include RequestContext metadata. Root spans (agent/workflow executions) always extract metadata automatically, while child spans only extract when you explicitly pass `requestContext`.
+
+## Creating child spans
+
+Child spans allow you to track fine-grained operations within your workflow steps or tools. They provide visibility into sub-operations like database queries, API calls, file operations, or complex calculations. This hierarchical structure helps you identify performance bottlenecks and understand the exact sequence of operations.
+
+Create child spans inside a tool call or workflow step to track specific operations:
+
+```ts
+execute: async (inputData, context) => {
+  // Create another child span for the main database operation
+  const querySpan = context?.tracingContext.currentSpan?.createChildSpan({
+    type: 'generic',
+    name: 'database-query',
+    input: { query: inputData.query },
+    metadata: { database: 'production' },
+  })
+
+  try {
+    const results = await db.query(inputData.query)
+    querySpan?.end({
+      output: results.data,
+      metadata: {
+        rowsReturned: results.length,
+        queryTimeMs: results.executionTime,
+        cacheHit: results.fromCache,
+      },
+    })
+    return results
+  } catch (error) {
+    querySpan?.error({
+      error,
+      metadata: { retryable: isRetryableError(error) },
+    })
+    throw error
+  }
+}
+```
+
+Child spans automatically inherit the trace context from their parent, maintaining the relationship hierarchy in your observability platform.
+
+## Span formatting
+
+Mastra provides two ways to transform span data before it reaches your observability platform: **span processors** and **custom span formatters**. Both allow you to modify, filter, or enrich trace data, but they operate at different levels and serve different purposes.
+
+| Feature             | Span Processors                 | Custom Span Formatters                         |
+| ------------------- | ------------------------------- | ---------------------------------------------- |
+| Configuration level | Observability config            | Per-exporter                                   |
+| Operates on         | Internal `Span` object          | Exported `ExportedSpan` data                   |
+| Applies to          | All exporters                   | Single exporter                                |
+| Async support       | No                              | Yes                                            |
+| Use case            | Security, filtering, enrichment | Platform-specific formatting, async enrichment |
+
+Use **span processors** for synchronous transformations that should apply to all exporters (like redacting sensitive data). Use **custom span formatters** when different exporters need different representations of the same data (like plain text for one platform and structured data for another), or when you need to perform asynchronous operations like fetching data from external APIs.
+
+### Span Processors
+
+Span processors transform, filter, or enrich trace data before it's exported. They act as a pipeline between span creation and export, enabling you to modify spans for security, compliance, or debugging purposes. Processors run once and affect all exporters.
+
+#### Built-in Processors
+
+- [Sensitive Data Filter](https://mastra.ai/docs/observability/tracing/processors/sensitive-data-filter) redacts sensitive information. It's enabled in the default observability config.
+
+#### Creating Custom Processors
+
+You can create custom span processors by implementing the `SpanOutputProcessor` interface. Here's a basic example that converts all input text in spans to lowercase:
+
+```ts
+import type { SpanOutputProcessor, AnySpan } from '@mastra/observability'
+
+export class LowercaseInputProcessor implements SpanOutputProcessor {
+  name = 'lowercase-processor'
+
+  process(span: AnySpan): AnySpan {
+    span.input = `${span.input}`.toLowerCase()
+    return span
+  }
+
+  async shutdown(): Promise<void> {
+    // Cleanup if needed
+  }
+}
+
+// Use the custom processor
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      development: {
+        spanOutputProcessors: [new LowercaseInputProcessor(), new SensitiveDataFilter()],
+        exporters: [new DefaultExporter()],
+      },
+    },
+  }),
+})
+```
+
+Processors are executed in the order they're defined, allowing you to chain multiple transformations. Common use cases include:
+
+- Redacting sensitive data (passwords, tokens, API keys)
+- Adding environment-specific metadata
+- Filtering out spans based on criteria
+- Normalizing data formats
+- Enriching spans with business context
+
+## Span filtering
+
+Span filtering lets you reduce noise and per-span costs before data reaches your observability platform. Configure it per observability instance, so different exporters or environments can keep different levels of detail.
+
+- Use `excludeSpanTypes` to drop entire categories of spans with minimal configuration.
+- Use `spanFilter` when you need custom logic based on the exported span data.
+
+The following example demonstrates how to combine both options in a single config:
+
+```ts
+import { Mastra } from '@mastra/core'
+import { SpanType } from '@mastra/core/observability'
+import { Observability, DefaultExporter } from '@mastra/observability'
+import { LangfuseExporter } from '@mastra/langfuse'
+
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      default: {
+        serviceName: 'my-app',
+        exporters: [new DefaultExporter(), new LangfuseExporter()],
+        excludeSpanTypes: [SpanType.MODEL_CHUNK, SpanType.MODEL_STEP],
+        spanFilter: span => {
+          if (span.type === SpanType.TOOL_CALL && span.attributes?.success) {
+            return false
+          }
+
+          return true
+        },
+      },
+    },
+  }),
+})
+```
+
+Filtering happens at export time in this order:
+
+1. Internal spans are dropped unless `includeInternalSpans` is `true`.
+2. `excludeSpanTypes` removes matching span types.
+3. `spanOutputProcessors` transform the remaining spans.
+4. `spanFilter` decides whether to keep the final exported span.
+
+If `spanFilter` throws, Mastra keeps the span and logs the error to avoid silent data loss. For the full span type list and more examples, see the [Span filtering reference](https://mastra.ai/reference/observability/tracing/span-filtering).
+
+### Custom Span Formatters
+
+Custom span formatters transform how spans appear in specific observability platforms. Unlike span processors, formatters are configured per-exporter, allowing different formatting for different destinations. Formatters support both synchronous and asynchronous operations.
+
+#### Use cases
+
+- **Extract plain text from AI SDK messages** - Convert structured message arrays to readable text
+- **Transform input/output formats** - Customize how data displays in specific platforms
+- **Platform-specific field mapping** - Add or remove fields based on platform requirements
+- **Async data enrichment** - Fetch additional context from external APIs or databases
+
+#### Configuration
+
+Add a `customSpanFormatter` to any exporter configuration:
+
+```ts
+import { BraintrustExporter } from '@mastra/braintrust'
+import { LangfuseExporter } from '@mastra/langfuse'
+import { SpanType } from '@mastra/core/observability'
+import type { CustomSpanFormatter } from '@mastra/core/observability'
+
+// Formatter that extracts plain text from AI messages
+const plainTextFormatter: CustomSpanFormatter = span => {
+  if (span.type === SpanType.AGENT_RUN && Array.isArray(span.input)) {
+    const userMessage = span.input.find(m => m.role === 'user')
+    return {
+      ...span,
+      input: userMessage?.content ?? span.input,
+    }
+  }
+  return span
+}
+
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      default: {
+        serviceName: 'my-service',
+        exporters: [
+          // Braintrust gets plain text formatting
+          new BraintrustExporter({
+            customSpanFormatter: plainTextFormatter,
+          }),
+          // Langfuse keeps the original structured format
+          new LangfuseExporter(),
+        ],
+      },
+    },
+  }),
+})
+```
+
+#### Chaining Multiple Formatters
+
+Use `chainFormatters` to combine multiple formatters. Chains support both sync and async formatters:
+
+```ts
+import { chainFormatters } from '@mastra/observability'
+
+const inputFormatter: CustomSpanFormatter = span => ({
+  ...span,
+  input: extractPlainText(span.input),
+})
+
+const outputFormatter: CustomSpanFormatter = span => ({
+  ...span,
+  output: extractPlainText(span.output),
+})
+
+const exporter = new BraintrustExporter({
+  customSpanFormatter: chainFormatters([inputFormatter, outputFormatter]),
+})
+```
+
+#### Async Formatters
+
+Custom span formatters support asynchronous operations, enabling use cases like fetching data from external APIs or databases to enrich your spans:
+
+```ts
+import type { CustomSpanFormatter } from '@mastra/core/observability'
+
+// Async formatter that enriches spans with user data
+const userEnrichmentFormatter: CustomSpanFormatter = async span => {
+  const userId = span.metadata?.userId
+  if (!userId) return span
+
+  // Fetch user data from your API or database
+  const userData = await fetchUserData(userId)
+
+  return {
+    ...span,
+    metadata: {
+      ...span.metadata,
+      userName: userData.name,
+      userEmail: userData.email,
+      department: userData.department,
+    },
+  }
+}
+
+// Async formatter that looks up additional context
+const contextEnrichmentFormatter: CustomSpanFormatter = async span => {
+  if (span.type !== SpanType.AGENT_RUN) return span
+
+  // Fetch experiment configuration
+  const experimentConfig = await getExperimentConfig(span.metadata?.experimentId)
+
+  return {
+    ...span,
+    metadata: {
+      ...span.metadata,
+      experimentVariant: experimentConfig?.variant,
+      experimentGroup: experimentConfig?.group,
+    },
+  }
+}
+
+// Use async formatters with an exporter
+const exporter = new BraintrustExporter({
+  customSpanFormatter: userEnrichmentFormatter,
+})
+
+// Or chain sync and async formatters together
+const exporter = new LangfuseExporter({
+  customSpanFormatter: chainFormatters([
+    plainTextFormatter, // sync
+    userEnrichmentFormatter, // async
+    contextEnrichmentFormatter, // async
+  ]),
+})
+```
+
+> **Note:** Async formatters add latency to span export. Keep async operations fast (under 100ms) to avoid slowing down your application. Consider using caching for frequently accessed data.
+
+## Serialization options
+
+Serialization options control how span data (input, output, and attributes) is truncated before export. This is useful when working with large payloads, deeply nested objects, or when you need to optimize trace storage.
+
+### Configuration
+
+Add `serializationOptions` to your observability configuration:
+
+```ts
+export const mastra = new Mastra({
+  observability: new Observability({
+    configs: {
+      default: {
+        serviceName: 'my-service',
+        serializationOptions: {
+          maxStringLength: 2048, // Maximum length for string values (default: 1024)
+          maxDepth: 10, // Maximum depth for nested objects (default: 6)
+          maxArrayLength: 100, // Maximum number of items in arrays (default: 50)
+          maxObjectKeys: 75, // Maximum number of keys in objects (default: 50)
+        },
+        exporters: [new DefaultExporter()],
+      },
+    },
+  }),
+})
+```
+
+### Available Options
+
+| Option            | Default | Description                                                      |
+| ----------------- | ------- | ---------------------------------------------------------------- |
+| `maxStringLength` | 1024    | Maximum length for string values. Longer strings are truncated.  |
+| `maxDepth`        | 6       | Maximum depth for nested objects. Deeper levels are omitted.     |
+| `maxArrayLength`  | 50      | Maximum number of items in arrays. Additional items are omitted. |
+| `maxObjectKeys`   | 50      | Maximum number of keys in objects. Additional keys are omitted.  |
+
+### Use cases
+
+**Increasing limits for debugging**: If your agents or tools work with large documents, API responses, or data structures, increase these limits to capture more context in your traces:
+
+```ts
+serializationOptions: {
+  maxStringLength: 8192,  // Capture longer text content
+  maxDepth: 12,           // Handle deeply nested JSON responses
+  maxArrayLength: 200,    // Keep more items from large lists
+}
+```
+
+**Reducing trace size for production**: Lower these values to reduce storage costs and improve performance when you don't need full payload visibility:
+
+```ts
+serializationOptions: {
+  maxStringLength: 256,   // Truncate strings aggressively
+  maxDepth: 3,            // Shallow object representation
+  maxArrayLength: 10,     // Keep only first few items
+  maxObjectKeys: 20,      // Limit object keys
+}
+```
+
+All options are optional — if not specified, they fall back to the defaults shown above.
+
+## Retrieving trace IDs
+
+When you execute agents or workflows with tracing enabled, the response includes a `traceId` that you can use to look up the full trace in your observability platform. This is useful for debugging, customer support, or correlating traces with other events in your system.
+
+### Agent Trace IDs
+
+Both `generate` and `stream` methods return the trace ID in their response:
+
+```ts
+// Using generate
+const result = await agent.generate('Hello')
+
+console.log('Trace ID:', result.traceId)
+
+// Using stream
+const streamResult = await agent.stream('Tell me a story')
+
+console.log('Trace ID:', streamResult.traceId)
+```
+
+### Workflow Trace IDs
+
+Workflow executions also return trace IDs:
+
+```ts
+// Create a workflow run
+const run = await mastra.getWorkflow('myWorkflow').createRun()
+
+// Start the workflow
+const result = await run.start({
+  inputData: { data: 'process this' },
+})
+
+console.log('Trace ID:', result.traceId)
+
+// Or stream the workflow
+const { stream, getWorkflowState } = run.stream({
+  inputData: { data: 'process this' },
+})
+
+// Get the final state which includes the trace ID
+const finalState = await getWorkflowState()
+console.log('Trace ID:', finalState.traceId)
+```
+
+### Using Trace IDs
+
+Once you have a trace ID, you can:
+
+1. **Look up traces in Studio**: Navigate to the traces view and search by ID
+2. **Query traces in external platforms**: Use the ID in Langfuse, Braintrust, MLflow, or your observability platform
+3. **Correlate with logs**: Include the trace ID in your application logs for cross-referencing
+4. **Share for debugging**: Provide trace IDs to support teams or developers for investigation
+
+The trace ID is only available when tracing is enabled. If tracing is disabled or sampling excludes the request, `traceId` will be `undefined`.
+
+## Integrating with external tracing systems
+
+When running Mastra agents or workflows within applications that have existing distributed tracing (OpenTelemetry, Datadog, etc.), you can connect Mastra traces to your parent trace context. This creates a unified view of your entire request flow, making it easier to understand how Mastra operations fit into the broader system.
+
+### Passing External Trace IDs
+
+Use the `tracingOptions` parameter to specify the trace context from your parent system:
+
+```ts
+// Get trace context from your existing tracing system
+const parentTraceId = getCurrentTraceId() // Your tracing system
+const parentSpanId = getCurrentSpanId() // Your tracing system
+
+// Execute Mastra operations as part of the parent trace
+const result = await agent.generate('Analyze this data', {
+  tracingOptions: {
+    traceId: parentTraceId,
+    parentSpanId: parentSpanId,
+  },
+})
+
+// The Mastra trace will now appear as a child in your distributed trace
+```
+
+### OpenTelemetry Integration
+
+Integration with OpenTelemetry allows Mastra traces to appear seamlessly in your existing observability platform:
+
+```ts
+import { trace } from '@opentelemetry/api'
+
+// Get the current OpenTelemetry span
+const currentSpan = trace.getActiveSpan()
+const spanContext = currentSpan?.spanContext()
+
+if (spanContext) {
+  const result = await agent.generate(userMessage, {
+    tracingOptions: {
+      traceId: spanContext.traceId,
+      parentSpanId: spanContext.spanId,
+    },
+  })
+}
+```
+
+### Workflow Integration
+
+Workflows support the same pattern for trace propagation:
+
+```ts
+const workflow = mastra.getWorkflow('data-pipeline')
+const run = await workflow.createRun()
+
+const result = await run.start({
+  inputData: { data: '...' },
+  tracingOptions: {
+    traceId: externalTraceId,
+    parentSpanId: externalSpanId,
+  },
+})
+```
+
+### ID Format Requirements
+
+Mastra validates trace and span IDs to ensure compatibility:
+
+- **Trace IDs**: 1-32 hexadecimal characters (OpenTelemetry uses 32)
+- **Span IDs**: 1-16 hexadecimal characters (OpenTelemetry uses 16)
+
+Invalid IDs are handled gracefully — Mastra logs an error and continues:
+
+- Invalid trace ID → generates a new trace ID
+- Invalid parent span ID → ignores the parent relationship
+
+This ensures tracing never crashes your application, even with malformed input.
+
+### Example: Express Middleware
+
+Here's a complete example showing trace propagation in an Express application:
+
+```ts
+import { trace } from '@opentelemetry/api'
+import express from 'express'
+
+const app = express()
+
+app.post('/api/analyze', async (req, res) => {
+  // Get current OpenTelemetry context
+  const currentSpan = trace.getActiveSpan()
+  const spanContext = currentSpan?.spanContext()
+
+  const result = await agent.generate(req.body.message, {
+    tracingOptions: spanContext
+      ? {
+          traceId: spanContext.traceId,
+          parentSpanId: spanContext.spanId,
+        }
+      : undefined,
+  })
+
+  res.json(result)
+})
+```
+
+This creates a single distributed trace that includes both the HTTP request handling and the Mastra agent execution, viewable in your observability platform of choice.
+
+## Flushing traces in serverless environments
+
+In serverless environments like Vercel's fluid compute, AWS Lambda, or Cloudflare Workers, runtime instances can be reused across multiple requests. The `flush()` method allows you to ensure all buffered spans are exported before the runtime terminates, without shutting down the exporter (which would prevent future exports).
+
+> **Storage requirements:** Serverless environments have ephemeral filesystems. Use external storage instead of local file storage (`file:./mastra.db`). See the [Vercel deployment guide](https://mastra.ai/guides/deployment/vercel) for a complete setup example.
+
+### Using `flush()`
+
+Call `flush()` on the observability instance to flush all exporters:
+
+```ts
+// Get the observability instance from Mastra
+const observability = mastra.getObservability()
+
+// Flush all buffered spans to all exporters
+await observability.flush()
+```
+
+### When to Use `flush()`
+
+Use `flush()` in these scenarios:
+
+- **End of serverless function execution**: Ensure spans are exported before the runtime is paused or terminated
+- **Before long-running operations**: Flush accumulated spans before a potentially slow operation
+- **Periodic flushing**: In long-running processes, periodically flush to ensure timely data availability
+
+```ts
+// Example: Vercel serverless function
+export async function POST(req: Request) {
+  const result = await agent.generate([{ role: 'user', content: await req.text() }])
+
+  // Ensure spans are exported before function completes
+  const observability = mastra.getObservability()
+  await observability.flush()
+
+  return Response.json(result)
+}
+```
+
+### `flush()` vs `shutdown()`
+
+| Method       | Behavior                                      | Use Case                                   |
+| ------------ | --------------------------------------------- | ------------------------------------------ |
+| `flush()`    | Exports buffered spans, keeps exporter active | Serverless environments, periodic flushing |
+| `shutdown()` | Exports buffered spans, releases resources    | Application shutdown, graceful termination |
+
+Use `flush()` when you need to ensure data is exported but want to keep the exporter ready for future requests. Use `shutdown()` only when the application is terminating.
+
+## What gets traced
+
+Mastra automatically creates spans for:
+
+### Agent Operations
+
+- **Agent runs** - Complete execution with instructions and tools
+- **LLM calls** - Model interactions with tokens and parameters
+- **Tool executions** - Function calls with inputs and outputs
+- **Memory operations** - Thread and semantic recall
+
+### Workflow Operations
+
+- **Workflow runs** - Full execution from start to finish
+- **Individual steps** - Step processing with inputs/outputs
+- **Control flow** - Conditionals, loops, parallel execution
+- **Wait operations** - Delays and event waiting
+
+## See also
+
+### Reference Documentation
+
+- [Configuration API](https://mastra.ai/reference/observability/tracing/configuration): ObservabilityConfig details
+- [Tracing Classes](https://mastra.ai/reference/observability/tracing/instances): Core classes and methods
+- [Span Interfaces](https://mastra.ai/reference/observability/tracing/spans): Span types and lifecycle
+- [Type Definitions](https://mastra.ai/reference/observability/tracing/interfaces): Complete interface reference
+- [Span filtering](https://mastra.ai/reference/observability/tracing/span-filtering): Filtering behavior, span types, and examples
+
+### Exporters
+
+- [DefaultExporter](https://mastra.ai/reference/observability/tracing/exporters/default-exporter): Storage persistence
+- [CloudExporter](https://mastra.ai/reference/observability/tracing/exporters/cloud-exporter): Mastra platform integration
+- [ConsoleExporter](https://mastra.ai/reference/observability/tracing/exporters/console-exporter): Debug output
+- [Arize](https://mastra.ai/reference/observability/tracing/exporters/arize): Arize Phoenix and Arize AX integration
+- [Braintrust](https://mastra.ai/reference/observability/tracing/exporters/braintrust): Braintrust integration
+- [Langfuse](https://mastra.ai/reference/observability/tracing/exporters/langfuse): Langfuse integration
+- [MLflow](https://mastra.ai/docs/observability/tracing/exporters/otel): MLflow OTLP endpoint setup
+- [OpenTelemetry](https://mastra.ai/reference/observability/tracing/exporters/otel): OTEL-compatible platforms
+
+### Bridges
+
+- [OpenTelemetry Bridge](https://mastra.ai/reference/observability/tracing/bridges/otel): OTEL context integration
+
+### Processors
+
+- [Sensitive Data Filter](https://mastra.ai/docs/observability/tracing/processors/sensitive-data-filter): Data redaction
+
+
+
+
+# Browser overview
+
+Browser support enables agents to navigate websites, interact with page elements, fill forms, and extract data. Mastra provides browser capabilities through SDK providers that wrap browser automation libraries and a CLI provider for agents that drive browsers through command-line tools.
+
+Mastra supports two SDK providers and one CLI provider:
+
+- [**AgentBrowser**](https://mastra.ai/docs/browser/agent-browser): A Playwright-based provider with accessibility-first element targeting. Best for general web automation and scraping.
+- [**Stagehand**](https://mastra.ai/docs/browser/stagehand): A Browserbase provider with AI-powered element detection. Best for complex interactions that benefit from natural language selectors.
+- [**BrowserViewer**](https://mastra.ai/docs/browser/browser-viewer): A CLI provider that launches Chrome and injects CDP URLs into CLI tools like agent-browser, browser-use, and browse. Best for workspace agents that drive browsers through shell commands.
+
+## When to use browser
+
+Use browser when your agent needs to:
+
+- Navigate websites and interact with page elements
+- Fill out forms and submit data
+- Extract structured data from web pages
+- Automate multi-step web workflows
+- Take actions that require a real browser (JavaScript rendering, authentication flows)
+
+## How it works
+
+When you assign a browser to an agent, Mastra includes the provider's tools in the agent's toolset. The agent uses these tools to control the browser: navigating to URLs, selecting elements, typing text, and reading page content.
+
+Each provider offers a different set of tools optimized for its approach.
+
+## Quickstart
+
+Install your provider of choice, for this example you'll use the AgentBrowser provider.
+
+**npm**:
+
+```bash
+npm install @mastra/agent-browser
+```
+
+**pnpm**:
+
+```bash
+pnpm add @mastra/agent-browser
+```
+
+**Yarn**:
+
+```bash
+yarn add @mastra/agent-browser
+```
+
+**Bun**:
+
+```bash
+bun add @mastra/agent-browser
+```
+
+Create a new browser instance:
+
+```typescript
+import { AgentBrowser } from '@mastra/agent-browser'
+
+export const browser = new AgentBrowser({
+  headless: false,
+})
+```
+
+Assign the browser to an agent:
+
+```typescript
+import { Agent } from '@mastra/core/agent'
+import { browser } from '../browsers'
+
+export const webAgent = new Agent({
+  id: 'web-agent',
+  name: 'Web Agent',
+  description: 'A web automation assistant that can navigate websites and complete tasks.',
+  model: 'openai/gpt-5.4',
+  browser,
+  instructions:
+    'You are a web automation assistant. Use browser tools to navigate websites and complete tasks.',
+})
+```
+
+The agent automatically receives all browser tools from the provider.
+
+## Cloud providers
+
+Both SDK providers support connecting to cloud browser services instead of launching a local browser.
+
+### Browserbase (Stagehand native)
+
+Stagehand has native Browserbase integration:
+
+```typescript
+import { StagehandBrowser } from '@mastra/stagehand'
+
+const browser = new StagehandBrowser({
+  env: 'BROWSERBASE',
+  apiKey: process.env.BROWSERBASE_API_KEY,
+  projectId: process.env.BROWSERBASE_PROJECT_ID,
+})
+```
+
+### CDP URL (any provider)
+
+Connect to any browser exposing a Chrome DevTools Protocol (CDP) endpoint:
+
+```typescript
+import { AgentBrowser } from '@mastra/agent-browser'
+
+const browser = new AgentBrowser({
+  cdpUrl: process.env.BROWSER_CDP_URL,
+  headless: true,
+})
+```
+
+This works with any [CDP-compatible](https://chromedevtools.github.io/devtools-protocol/) browser service.
+
+## Screencast
+
+Browser providers stream a live video feed of the browser to the Mastra Studio UI. This lets you watch the agent interact with pages in real-time.
+
+Screencast requires WebSocket support. Install these packages in your project:
+
+**npm**:
+
+```bash
+npm install ws @hono/node-ws
+```
+
+**pnpm**:
+
+```bash
+pnpm add ws @hono/node-ws
+```
+
+**Yarn**:
+
+```bash
+yarn add ws @hono/node-ws
+```
+
+**Bun**:
+
+```bash
+bun add ws @hono/node-ws
+```
+
+> **Note:** These packages are not included by default because they are incompatible with serverless environments like Cloudflare Workers. If they are not installed, screencast is disabled but all other browser functionality works normally.
+
+Screencast is enabled by default and can be configured:
+
+```typescript
+const browser = new AgentBrowser({
+  screencast: {
+    enabled: true,
+    format: 'jpeg',
+    quality: 80,
+    maxWidth: 1280,
+    maxHeight: 720,
+  },
+})
+```
+
+## Next steps
+
+- [AgentBrowser](https://mastra.ai/docs/browser/agent-browser)
+- [Stagehand](https://mastra.ai/docs/browser/stagehand)
+- [BrowserViewer](https://mastra.ai/docs/browser/browser-viewer)
+- [MastraBrowser reference](https://mastra.ai/reference/browser/mastra-browser)
+
+
+
+
+# RAG (Retrieval-Augmented Generation) in Mastra
+
+RAG in Mastra helps you enhance LLM outputs by incorporating relevant context from your own data sources, improving accuracy and grounding responses in real information.
+
+Mastra's RAG system provides:
+
+- Standardized APIs to process and embed documents
+- Support for multiple vector stores
+- Chunking and embedding strategies for optimal retrieval
+- Observability for tracking embedding and retrieval performance
+
+## Example
+
+To implement RAG, you process your documents into chunks, create embeddings, store them in a vector database, and then retrieve relevant context at query time.
+
+```ts
+import { embedMany } from 'ai'
+import { PgVector } from '@mastra/pg'
+import { MDocument } from '@mastra/rag'
+import { z } from 'zod'
+
+// 1. Initialize document
+const doc = MDocument.fromText(`Your document text here...`)
+
+// 2. Create chunks
+const chunks = await doc.chunk({
+  strategy: 'recursive',
+  size: 512,
+  overlap: 50,
+})
+
+// 3. Generate embeddings; we need to pass the text of each chunk
+import { ModelRouterEmbeddingModel } from '@mastra/core/llm'
+
+const { embeddings } = await embedMany({
+  values: chunks.map(chunk => chunk.text),
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+})
+
+// 4. Store in vector database
+const pgVector = new PgVector({
+  id: 'pg-vector',
+  connectionString: process.env.POSTGRES_CONNECTION_STRING,
+})
+await pgVector.upsert({
+  indexName: 'embeddings',
+  vectors: embeddings,
+}) // using an index name of 'embeddings'
+
+// 5. Query similar chunks
+const results = await pgVector.query({
+  indexName: 'embeddings',
+  queryVector: queryVector,
+  topK: 3,
+}) // queryVector is the embedding of the query
+
+console.log('Similar chunks:', results)
+```
+
+This example shows the essentials: initialize a document, create chunks, generate embeddings, store them, and query for similar content.
+
+## Document processing
+
+The basic building block of RAG is document processing. Documents can be chunked using various strategies (recursive, sliding window, etc.) and enriched with metadata. See the [chunking and embedding doc](https://mastra.ai/docs/rag/chunking-and-embedding).
+
+## Vector storage
+
+Mastra supports multiple vector stores for embedding persistence and similarity search, including pgvector, Pinecone, Qdrant, and MongoDB. See the [vector database doc](https://mastra.ai/docs/rag/vector-databases).
+
+## More resources
+
+- [Chain of Thought RAG Example](https://github.com/mastra-ai/mastra/tree/main/examples/basics/rag/cot-rag)
+
+
+
+# Storing embeddings in a vector database
+
+After generating embeddings, you need to store them in a database that supports vector similarity search. Mastra provides a consistent interface for storing and querying embeddings across various vector databases.
+
+## Supported databases
+
+**MongoDB**:
+
+```ts
+import { MongoDBVector } from '@mastra/mongodb'
+
+const store = new MongoDBVector({
+  id: 'mongodb-vector',
+  uri: process.env.MONGODB_URI,
+  dbName: process.env.MONGODB_DATABASE,
+})
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+### Using MongoDB Atlas Vector search
+
+For detailed setup instructions and best practices, see the [official MongoDB Atlas Vector Search documentation](https://www.mongodb.com/docs/atlas/atlas-vector-search/vector-search-overview/?utm_campaign=devrel\&utm_source=third-party-content\&utm_medium=cta\&utm_content=mastra-docs).
+
+**PgVector**:
+
+```ts
+import { PgVector } from '@mastra/pg'
+
+const store = new PgVector({
+  id: 'pg-vector',
+  connectionString: process.env.POSTGRES_CONNECTION_STRING,
+})
+
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+### Using PostgreSQL with pgvector
+
+PostgreSQL with the pgvector extension is a good solution for teams already using PostgreSQL who want to minimize infrastructure complexity. For detailed setup instructions and best practices, see the [official pgvector repository](https://github.com/pgvector/pgvector).
+
+**Pinecone**:
+
+```ts
+import { PineconeVector } from '@mastra/pinecone'
+
+const store = new PineconeVector({
+  id: 'pinecone-vector',
+  apiKey: process.env.PINECONE_API_KEY,
+})
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**Qdrant**:
+
+```ts
+import { QdrantVector } from '@mastra/qdrant'
+
+const store = new QdrantVector({
+  id: 'qdrant-vector',
+  url: process.env.QDRANT_URL,
+  apiKey: process.env.QDRANT_API_KEY,
+})
+
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**Chroma**:
+
+```ts
+import { ChromaVector } from '@mastra/chroma'
+
+// Running Chroma locally
+// const store = new ChromaVector()
+
+// Running on Chroma Cloud
+const store = new ChromaVector({
+  id: 'chroma-vector',
+  apiKey: process.env.CHROMA_API_KEY,
+  tenant: process.env.CHROMA_TENANT,
+  database: process.env.CHROMA_DATABASE,
+})
+
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**Astra**:
+
+```ts
+import { AstraVector } from '@mastra/astra'
+
+const store = new AstraVector({
+  id: 'astra-vector',
+  token: process.env.ASTRA_DB_TOKEN,
+  endpoint: process.env.ASTRA_DB_ENDPOINT,
+  keyspace: process.env.ASTRA_DB_KEYSPACE,
+})
+
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**libSQL**:
+
+```ts
+import { LibSQLVector } from '@mastra/core/vector/libsql'
+
+const store = new LibSQLVector({
+  id: 'libsql-vector',
+  url: process.env.DATABASE_URL,
+  authToken: process.env.DATABASE_AUTH_TOKEN, // Optional: for Turso cloud databases
+})
+
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**Upstash**:
+
+```ts
+import { UpstashVector } from '@mastra/upstash'
+
+// In upstash they refer to the store as an index
+const store = new UpstashVector({
+  id: 'upstash-vector',
+  url: process.env.UPSTASH_URL,
+  token: process.env.UPSTASH_TOKEN,
+})
+
+// There is no store.createIndex call here, Upstash creates indexes (known as namespaces in Upstash) automatically
+// when you upsert if that namespace does not exist yet.
+await store.upsert({
+  indexName: 'myCollection', // the namespace name in Upstash
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**Cloudflare**:
+
+```ts
+import { CloudflareVector } from '@mastra/vectorize'
+
+const store = new CloudflareVector({
+  id: 'cloudflare-vector',
+  accountId: process.env.CF_ACCOUNT_ID,
+  apiToken: process.env.CF_API_TOKEN,
+})
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**OpenSearch**:
+
+```ts
+import { OpenSearchVector } from '@mastra/opensearch'
+
+const store = new OpenSearchVector({ id: 'opensearch', node: process.env.OPENSEARCH_URL })
+
+await store.createIndex({
+  indexName: 'my-collection',
+  dimension: 1536,
+})
+
+await store.upsert({
+  indexName: 'my-collection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**Elasticsearch**:
+
+```ts
+import { ElasticSearchVector } from '@mastra/elasticsearch'
+
+const store = new ElasticSearchVector({
+  id: 'elasticsearch-vector',
+  url: process.env.ELASTICSEARCH_URL,
+  auth: {
+    apiKey: process.env.ELASTICSEARCH_API_KEY,
+  },
+})
+
+await store.createIndex({
+  indexName: 'my-collection',
+  dimension: 1536,
+})
+
+await store.upsert({
+  indexName: 'my-collection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+### Using Elasticsearch
+
+For detailed setup instructions and best practices, see the [official Elasticsearch documentation](https://www.elastic.co/docs/solutions/search/get-started).
+
+**Couchbase**:
+
+```ts
+import { CouchbaseVector } from '@mastra/couchbase'
+
+const store = new CouchbaseVector({
+  id: 'couchbase-vector',
+  connectionString: process.env.COUCHBASE_CONNECTION_STRING,
+  username: process.env.COUCHBASE_USERNAME,
+  password: process.env.COUCHBASE_PASSWORD,
+  bucketName: process.env.COUCHBASE_BUCKET,
+  scopeName: process.env.COUCHBASE_SCOPE,
+  collectionName: process.env.COUCHBASE_COLLECTION,
+})
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+**Lance**:
+
+```ts
+import { LanceVectorStore } from '@mastra/lance'
+
+const store = await LanceVectorStore.create('/path/to/db')
+
+await store.createIndex({
+  tableName: 'myVectors',
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+
+await store.upsert({
+  tableName: 'myVectors',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+### Using LanceDB
+
+LanceDB is an embedded vector database built on the Lance columnar format, suitable for local development or cloud deployment. For detailed setup instructions and best practices, see the [official LanceDB documentation](https://lancedb.github.io/lancedb/).
+
+**S3 Vectors**:
+
+```ts
+import { S3Vectors } from '@mastra/s3vectors'
+
+const store = new S3Vectors({
+  id: 's3-vectors',
+  vectorBucketName: 'my-vector-bucket',
+  clientConfig: {
+    region: 'us-east-1',
+  },
+  nonFilterableMetadataKeys: ['content'],
+})
+
+await store.createIndex({
+  indexName: 'my-index',
+  dimension: 1536,
+})
+await store.upsert({
+  indexName: 'my-index',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({ text: chunk.text })),
+})
+```
+
+## Using vector storage
+
+Once initialized, all vector stores share the same interface for creating indexes, upserting embeddings, and querying.
+
+### Creating Indexes
+
+Before storing embeddings, you need to create an index with the appropriate dimension size for your embedding model:
+
+```ts
+// Create an index with dimension 1536 (for text-embedding-3-small)
+await store.createIndex({
+  indexName: 'myCollection',
+  dimension: 1536,
+})
+```
+
+The dimension size must match the output dimension of your chosen embedding model. Common dimension sizes are:
+
+- `OpenAI text-embedding-3-small`: 1536 dimensions (or custom, e.g., 256)
+- `Cohere embed-multilingual-v3`: 1024 dimensions
+- `Google gemini-embedding-001`: 768 dimensions (or custom)
+
+> **Warning:** Index dimensions can't be changed after creation. To use a different model, delete and recreate the index with the new dimension size.
+
+### Naming Rules for Databases
+
+Each vector database enforces specific naming conventions for indexes and collections to ensure compatibility and prevent conflicts.
+
+**MongoDB**:
+
+Collection (index) names must:
+
+- Start with a letter or underscore
+- Be up to 120 bytes long
+- Contain only letters, numbers, underscores, or dots
+- Cannot contain `$` or the null character
+- Example: `my_collection.123` is valid
+- Example: `my-index` is not valid (contains hyphen)
+- Example: `My$Collection` is not valid (contains `$`)
+
+**PgVector**:
+
+Index names must:
+
+- Start with a letter or underscore
+- Contain only letters, numbers, and underscores
+- Example: `my_index_123` is valid
+- Example: `my-index` is not valid (contains hyphen)
+
+**Pinecone**:
+
+Index names must:
+
+- Use only lowercase letters, numbers, and dashes
+
+- Not contain dots (used for DNS routing)
+
+- Not use non-Latin characters or emojis
+
+- Have a combined length (with project ID) under 52 characters
+
+  - Example: `my-index-123` is valid
+  - Example: `my.index` is not valid (contains dot)
+
+**Qdrant**:
+
+Collection names must:
+
+- Be 1-255 characters long
+
+- Not contain any of these special characters:
+
+  - `< > : " / \ | ? *`
+  - Null character (`\0`)
+  - Unit separator (`\u{1F}`)
+
+- Example: `my_collection_123` is valid
+
+- Example: `my/collection` is not valid (contains slash)
+
+**Chroma**:
+
+Collection names must:
+
+- Be 3-63 characters long
+- Start and end with a letter or number
+- Contain only letters, numbers, underscores, or hyphens
+- Not contain consecutive periods (..)
+- Not be a valid IPv4 address
+- Example: `my-collection-123` is valid
+- Example: `my..collection` is not valid (consecutive periods)
+
+**Astra**:
+
+Collection names must:
+
+- Not be empty
+- Be 48 characters or less
+- Contain only letters, numbers, and underscores
+- Example: `my_collection_123` is valid
+- Example: `my-collection` is not valid (contains hyphen)
+
+**libSQL**:
+
+Index names must:
+
+- Start with a letter or underscore
+- Contain only letters, numbers, and underscores
+- Example: `my_index_123` is valid
+- Example: `my-index` is not valid (contains hyphen)
+
+**Upstash**:
+
+Namespace names must:
+
+- Be 2-100 characters long
+
+- Contain only:
+
+  - Alphanumeric characters (a-z, A-Z, 0-9)
+  - Underscores, hyphens, dots
+
+- Not start or end with special characters (\_, -, .)
+
+- Can be case-sensitive
+
+- Example: `MyNamespace123` is valid
+
+- Example: `_namespace` is not valid (starts with underscore)
+
+**Cloudflare**:
+
+Index names must:
+
+- Start with a letter
+- Be shorter than 32 characters
+- Contain only lowercase ASCII letters, numbers, and dashes
+- Use dashes instead of spaces
+- Example: `my-index-123` is valid
+- Example: `My_Index` is not valid (uppercase and underscore)
+
+**OpenSearch**:
+
+Index names must:
+
+- Use only lowercase letters
+- Not begin with underscores or hyphens
+- Not contain spaces, commas
+- Not contain special characters (e.g. `:`, `"`, `*`, `+`, `/`, `\`, `|`, `?`, `#`, `>`, `<`)
+- Example: `my-index-123` is valid
+- Example: `My_Index` is not valid (contains uppercase letters)
+- Example: `_myindex` is not valid (begins with underscore)
+
+**Elasticsearch**:
+
+Index names must:
+
+- Use only lowercase letters
+- Not exceed 255 bytes (counting multi-byte characters)
+- Not begin with underscores, hyphens, or plus signs
+- Not contain spaces, commas
+- Not contain special characters (e.g. `:`, `"`, `*`, `+`, `/`, `\`, `|`, `?`, `#`, `>`, `<`)
+- Not be "." or ".."
+- Not start with "." (deprecated except for system/hidden indices)
+- Example: `my-index-123` is valid
+- Example: `My_Index` is not valid (contains uppercase letters)
+- Example: `_myindex` is not valid (begins with underscore)
+- Example: `.myindex` is not valid (begins with dot, deprecated)
+
+**S3 Vectors**:
+
+Index names must:
+
+- Be unique within the same vector bucket
+- Be 3–63 characters long
+- Use only lowercase letters (`a–z`), numbers (`0–9`), hyphens (`-`), and dots (`.`)
+- Begin and end with a letter or number
+- Example: `my-index.123` is valid
+- Example: `my_index` is not valid (contains underscore)
+- Example: `-myindex` is not valid (begins with hyphen)
+- Example: `myindex-` is not valid (ends with hyphen)
+- Example: `MyIndex` is not valid (contains uppercase letters)
+
+### Upserting Embeddings
+
+After creating an index, you can store embeddings along with their basic metadata:
+
+```ts
+// Store embeddings with their corresponding metadata
+await store.upsert({
+  indexName: 'myCollection', // index name
+  vectors: embeddings, // array of embedding vectors
+  metadata: chunks.map(chunk => ({
+    text: chunk.text, // The original text content
+    id: chunk.id, // Optional unique identifier
+  })),
+})
+```
+
+The upsert operation:
+
+- Takes an array of embedding vectors and their corresponding metadata
+- Updates existing vectors if they share the same ID
+- Creates new vectors if they don't exist
+- Automatically handles batching for large datasets
+
+## Adding metadata
+
+Vector stores support rich metadata (any JSON-serializable fields) for filtering and organization. Since metadata is stored with no fixed schema, use consistent field naming to avoid unexpected query results.
+
+> **Warning:** Metadata is crucial for vector storage - without it, you'd only have numerical embeddings with no way to return the original text or filter results. Always store at least the source text as metadata.
+
+```ts
+// Store embeddings with rich metadata for better organization and filtering
+await store.upsert({
+  indexName: 'myCollection',
+  vectors: embeddings,
+  metadata: chunks.map(chunk => ({
+    // Basic content
+    text: chunk.text,
+    id: chunk.id,
+
+    // Document organization
+    source: chunk.source,
+    category: chunk.category,
+
+    // Temporal metadata
+    createdAt: new Date().toISOString(),
+    version: '1.0',
+
+    // Custom fields
+    language: chunk.language,
+    author: chunk.author,
+    confidenceScore: chunk.score,
+  })),
+})
+```
+
+Key metadata considerations:
+
+- Be strict with field naming - inconsistencies like 'category' vs 'Category' will affect queries
+- Only include fields you plan to filter or sort by - extra fields add overhead
+- Add timestamps (e.g., 'createdAt', 'lastUpdated') to track content freshness
+
+## Deleting vectors
+
+When building RAG applications, you often need to clean up stale vectors when documents are deleted or updated. Mastra provides the `deleteVectors` method that supports deleting vectors by metadata filters, making it straightforward to remove all embeddings associated with a specific document.
+
+### Delete by Metadata Filter
+
+The most common use case is deleting all vectors for a specific document when a user deletes it:
+
+```ts
+// Delete all vectors for a specific document
+await store.deleteVectors({
+  indexName: 'myCollection',
+  filter: { docId: 'document-123' },
+})
+```
+
+This is particularly useful when:
+
+- A user deletes a document and you need to remove all its chunks
+- You're re-indexing a document and want to remove old vectors first
+- You need to clean up vectors for a specific user or tenant
+
+### Delete Multiple Documents
+
+You can also use complex filters to delete vectors matching multiple conditions:
+
+```ts
+// Delete all vectors for multiple documents
+await store.deleteVectors({
+  indexName: 'myCollection',
+  filter: {
+    docId: { $in: ['doc-1', 'doc-2', 'doc-3'] },
+  },
+})
+
+// Delete vectors for a specific user's documents
+await store.deleteVectors({
+  indexName: 'myCollection',
+  filter: {
+    $and: [{ userId: 'user-123' }, { status: 'archived' }],
+  },
+})
+```
+
+### Delete by Vector IDs
+
+If you have specific vector IDs to delete, you can pass them directly:
+
+```ts
+// Delete specific vectors by their IDs
+await store.deleteVectors({
+  indexName: 'myCollection',
+  ids: ['vec-1', 'vec-2', 'vec-3'],
+})
+```
+
+## Best practices
+
+- Create indexes before bulk insertions
+- Use batch operations for large insertions (the upsert method handles batching automatically)
+- Only store metadata you'll query against
+- Match embedding dimensions to your model (e.g., 1536 for `text-embedding-3-small`)
+
+
+
+# Retrieval in RAG systems
+
+After storing embeddings, you need to retrieve relevant chunks to answer user queries.
+
+Mastra provides flexible retrieval options with support for semantic search, filtering, and re-ranking.
+
+## How retrieval works
+
+1. The user's query is converted to an embedding using the same model used for document embeddings
+2. This embedding is compared to stored embeddings using vector similarity
+3. The most similar chunks are retrieved and can be optionally:
+
+- Filtered by metadata
+- Re-ranked for better relevance
+- Processed through a knowledge graph
+
+## Basic retrieval
+
+The simplest approach is direct semantic search. This method uses vector similarity to find chunks that are semantically similar to the query:
+
+```ts
+import { embed } from 'ai'
+import { PgVector } from '@mastra/pg'
+import { ModelRouterEmbeddingModel } from '@mastra/core/llm'
+
+// Convert query to embedding
+const { embedding } = await embed({
+  value: 'What are the main points in the article?',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+})
+
+// Query vector store
+const pgVector = new PgVector({
+  id: 'pg-vector',
+  connectionString: process.env.POSTGRES_CONNECTION_STRING,
+})
+const results = await pgVector.query({
+  indexName: 'embeddings',
+  queryVector: embedding,
+  topK: 10,
+})
+
+// Display results
+console.log(results)
+```
+
+The `topK` parameter specifies the maximum number of most similar results to return from the vector search.
+
+Results include both the text content and a similarity score:
+
+```ts
+[
+  {
+    text: 'Climate change poses significant challenges...',
+    score: 0.89,
+    metadata: { source: 'article1.txt' },
+  },
+  {
+    text: 'Rising temperatures affect crop yields...',
+    score: 0.82,
+    metadata: { source: 'article1.txt' },
+  },
+]
+```
+
+## Advanced retrieval options
+
+### Metadata Filtering
+
+Filter results based on metadata fields to narrow down the search space. This approach - combining vector similarity search with metadata filters - is sometimes called hybrid vector search, as it merges semantic search with structured filtering criteria.
+
+This is useful when you have documents from different sources, time periods, or with specific attributes. Mastra provides a unified MongoDB-style query syntax that works across all supported vector stores.
+
+For detailed information about available operators and syntax, see the [Metadata Filters Reference](https://mastra.ai/reference/rag/metadata-filters).
+
+Basic filtering examples:
+
+```ts
+// Simple equality filter
+const results = await pgVector.query({
+  indexName: 'embeddings',
+  queryVector: embedding,
+  topK: 10,
+  filter: {
+    source: 'article1.txt',
+  },
+})
+
+// Numeric comparison
+const results = await pgVector.query({
+  indexName: 'embeddings',
+  queryVector: embedding,
+  topK: 10,
+  filter: {
+    price: { $gt: 100 },
+  },
+})
+
+// Multiple conditions
+const results = await pgVector.query({
+  indexName: 'embeddings',
+  queryVector: embedding,
+  topK: 10,
+  filter: {
+    category: 'electronics',
+    price: { $lt: 1000 },
+    inStock: true,
+  },
+})
+
+// Array operations
+const results = await pgVector.query({
+  indexName: 'embeddings',
+  queryVector: embedding,
+  topK: 10,
+  filter: {
+    tags: { $in: ['sale', 'new'] },
+  },
+})
+
+// Logical operators
+const results = await pgVector.query({
+  indexName: 'embeddings',
+  queryVector: embedding,
+  topK: 10,
+  filter: {
+    $or: [{ category: 'electronics' }, { category: 'accessories' }],
+    $and: [{ price: { $gt: 50 } }, { price: { $lt: 200 } }],
+  },
+})
+```
+
+Common use cases for metadata filtering:
+
+- Filter by document source or type
+- Filter by date ranges
+- Filter by specific categories or tags
+- Filter by numerical ranges (e.g., price, rating)
+- Combine multiple conditions for precise querying
+- Filter by document attributes (e.g., language, author)
+
+### Vector Query Tool
+
+Sometimes you want to give your agent the ability to query a vector database directly. The Vector Query Tool allows your agent to be in charge of retrieval decisions, combining semantic search with optional filtering and reranking based on the agent's understanding of the user's needs.
+
+```ts
+import { createVectorQueryTool } from '@mastra/rag'
+import { ModelRouterEmbeddingModel } from '@mastra/core/llm'
+
+const vectorQueryTool = createVectorQueryTool({
+  vectorStoreName: 'pgVector',
+  indexName: 'embeddings',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+})
+```
+
+When creating the tool, pay special attention to the tool's name and description - these help the agent understand when and how to use the retrieval capabilities. For example, you might name it "SearchKnowledgeBase" and describe it as "Search through our documentation to find relevant information about X topic."
+
+This is particularly useful when:
+
+- Your agent needs to dynamically decide what information to retrieve
+- The retrieval process requires complex decision-making
+- You want the agent to combine multiple retrieval strategies based on context
+
+#### Database-Specific Configurations
+
+The Vector Query Tool supports database-specific configurations that enable you to leverage unique features and optimizations of different vector stores.
+
+> **Note:** These configurations are for **query-time options** like namespaces, performance tuning, and filtering—not for database connection setup.
+>
+> Connection credentials (URLs, auth tokens) are configured when you instantiate the vector store class (e.g., `new LibSQLVector({ url: '...' })`).
+
+```ts
+import { createVectorQueryTool } from '@mastra/rag'
+import { ModelRouterEmbeddingModel } from '@mastra/core/llm'
+
+// Pinecone with namespace
+const pineconeQueryTool = createVectorQueryTool({
+  vectorStoreName: 'pinecone',
+  indexName: 'docs',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  databaseConfig: {
+    pinecone: {
+      namespace: 'production', // Isolate data by environment
+    },
+  },
+})
+
+// pgVector with performance tuning
+const pgVectorQueryTool = createVectorQueryTool({
+  vectorStoreName: 'postgres',
+  indexName: 'embeddings',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  databaseConfig: {
+    pgvector: {
+      minScore: 0.7, // Filter low-quality results
+      ef: 200, // HNSW search parameter
+      probes: 10, // IVFFlat probe parameter
+    },
+  },
+})
+
+// Chroma with advanced filtering
+const chromaQueryTool = createVectorQueryTool({
+  vectorStoreName: 'chroma',
+  indexName: 'documents',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  databaseConfig: {
+    chroma: {
+      where: { category: 'technical' },
+      whereDocument: { $contains: 'API' },
+    },
+  },
+})
+
+// LanceDB with table specificity
+const lanceQueryTool = createVectorQueryTool({
+  vectorStoreName: 'lance',
+  indexName: 'documents',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  databaseConfig: {
+    lance: {
+      tableName: 'myVectors', // Specify which table to query
+      includeAllColumns: true, // Include all metadata columns in results
+    },
+  },
+})
+```
+
+**Key Benefits:**
+
+- **Pinecone namespaces**: Organize vectors by tenant, environment, or data type
+- **pgVector optimization**: Control search accuracy and speed with ef/probes parameters
+- **Quality filtering**: Set minimum similarity thresholds to improve result relevance
+- **LanceDB tables**: Separate data into tables for better organization and performance
+- **Runtime flexibility**: Override configurations dynamically based on context
+
+**Common Use Cases:**
+
+- Multi-tenant applications using Pinecone namespaces
+- Performance optimization in high-load scenarios
+- Environment-specific configurations (dev/staging/prod)
+- Quality-gated search results
+- Embedded, file-based vector storage with LanceDB for edge deployment scenarios
+
+You can also override these configurations at runtime using the request context:
+
+```ts
+import { RequestContext } from '@mastra/core/request-context'
+
+const requestContext = new RequestContext()
+requestContext.set('databaseConfig', {
+  pinecone: {
+    namespace: 'runtime-namespace',
+  },
+})
+
+await pineconeQueryTool.execute({ queryText: 'search query' }, { mastra, requestContext })
+```
+
+For detailed configuration options and advanced usage, see the [Vector Query Tool Reference](https://mastra.ai/reference/tools/vector-query-tool).
+
+### Vector Store Prompts
+
+Vector store prompts define query patterns and filtering capabilities for each vector database implementation. When implementing filtering, these prompts are required in the agent's instructions to specify valid operators and syntax for each vector store implementation.
+
+**pgVector**:
+
+```ts
+import { PGVECTOR_PROMPT } from '@mastra/pg'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${PGVECTOR_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**Pinecone**:
+
+```ts
+import { PINECONE_PROMPT } from '@mastra/pinecone'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${PINECONE_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**Qdrant**:
+
+```ts
+import { QDRANT_PROMPT } from '@mastra/qdrant'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${QDRANT_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**Chroma**:
+
+```ts
+import { CHROMA_PROMPT } from '@mastra/chroma'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${CHROMA_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**Astra**:
+
+```ts
+import { ASTRA_PROMPT } from '@mastra/astra'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${ASTRA_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**libSQL**:
+
+```ts
+import { LIBSQL_PROMPT } from '@mastra/libsql'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${LIBSQL_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**Upstash**:
+
+```ts
+import { UPSTASH_PROMPT } from '@mastra/upstash'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${UPSTASH_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**Vectorize**:
+
+```ts
+import { VECTORIZE_PROMPT } from '@mastra/vectorize'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${VECTORIZE_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**MongoDB**:
+
+```ts
+import { MONGODB_PROMPT } from '@mastra/mongodb'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${MONGODB_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**OpenSearch**:
+
+```ts
+import { OPENSEARCH_PROMPT } from '@mastra/opensearch'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${OPENSEARCH_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+**S3Vectors**:
+
+```ts
+import { S3VECTORS_PROMPT } from '@mastra/s3vectors'
+
+export const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  model: 'openai/gpt-5.4',
+  instructions: `
+  Process queries using the provided context. Structure responses to be concise and relevant.
+  ${S3VECTORS_PROMPT}
+  `,
+  tools: { vectorQueryTool },
+})
+```
+
+### Re-ranking
+
+Initial vector similarity search can sometimes miss nuanced relevance. Re-ranking is a more computationally expensive process, but more accurate algorithm that improves results by:
+
+- Considering word order and exact matches
+- Applying more sophisticated relevance scoring
+- Using a method called cross-attention between query and documents
+
+Here's how to use re-ranking:
+
+```ts
+import { rerankWithScorer as rerank, MastraAgentRelevanceScorer } from '@mastra/rag'
+
+// Get initial results from vector search
+const initialResults = await pgVector.query({
+  indexName: 'embeddings',
+  queryVector: queryEmbedding,
+  topK: 10,
+})
+
+// Create a relevance scorer
+const relevanceProvider = new MastraAgentRelevanceScorer('relevance-scorer', 'openai/gpt-5.4')
+
+// Re-rank the results
+const rerankedResults = await rerank({
+  results: initialResults,
+  query,
+  scorer: relevanceProvider,
+  options: {
+    weights: {
+      semantic: 0.5, // How well the content matches the query semantically
+      vector: 0.3, // Original vector similarity score
+      position: 0.2, // Preserves original result ordering
+    },
+    topK: 10,
+  },
+})
+```
+
+The weights control how different factors influence the final ranking:
+
+- `semantic`: Higher values prioritize semantic understanding and relevance to the query
+- `vector`: Higher values favor the original vector similarity scores
+- `position`: Higher values help maintain the original ordering of results
+
+> **Note:** For semantic scoring to work properly during re-ranking, each result must include the text content in its `metadata.text` field.
+
+You can also use other relevance score providers like Cohere or ZeroEntropy:
+
+```ts
+const relevanceProvider = new CohereRelevanceScorer('rerank-v3.5')
+```
+
+```ts
+const relevanceProvider = new ZeroEntropyRelevanceScorer('zerank-1')
+```
+
+The re-ranked results combine vector similarity with semantic understanding to improve retrieval quality.
+
+For more details about re-ranking, see the [rerank()](https://mastra.ai/reference/rag/rerankWithScorer) method.
+
+For graph-based retrieval that follows connections between chunks, see the [GraphRAG](https://mastra.ai/docs/rag/graph-rag) documentation.
+
+
+
+# GraphRAG
+
+Graph-based retrieval enhances traditional vector search by following relationships between chunks of information. This approach is useful when information is spread across multiple documents or when documents reference each other.
+
+## When to use GraphRAG
+
+GraphRAG is particularly effective when:
+
+- Information is spread across multiple documents
+- Documents reference each other
+- You need to traverse relationships to find complete answers
+- Understanding connections between concepts is important
+- Simple vector similarity misses important contextual relationships
+
+For straightforward semantic search without relationship traversal, use [standard retrieval methods](https://mastra.ai/docs/rag/retrieval).
+
+## How GraphRAG works
+
+GraphRAG combines vector similarity with knowledge graph traversal:
+
+1. Initial vector search retrieves relevant chunks based on semantic similarity
+2. A knowledge graph is constructed from the retrieved chunks
+3. The graph is traversed to find connected information
+4. Results include both directly relevant chunks and related content
+
+This process helps surface information that might not be semantically similar to the query but is contextually relevant through connections.
+
+## Creating a graph query tool
+
+The Graph Query Tool provides agents with the ability to perform graph-based retrieval:
+
+```ts
+import { createGraphRAGTool } from '@mastra/rag'
+import { ModelRouterEmbeddingModel } from '@mastra/core/llm'
+
+const graphQueryTool = createGraphRAGTool({
+  vectorStoreName: 'pgVector',
+  indexName: 'embeddings',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  graphOptions: {
+    threshold: 0.7,
+  },
+})
+```
+
+### Configuration options
+
+The `graphOptions` parameter controls how the knowledge graph is built and traversed:
+
+- `threshold`: Similarity threshold (0-1) for determining which chunks are related. Higher values create sparser graphs with stronger connections; lower values create denser graphs with more potential relationships.
+- `dimension`: Vector embedding dimension. Must match the embedding model's output dimension (e.g., 1536 for OpenAI's text-embedding-3-small).
+
+```ts
+const graphQueryTool = createGraphRAGTool({
+  vectorStoreName: 'pgVector',
+  indexName: 'embeddings',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  graphOptions: {
+    dimension: 1536,
+    threshold: 0.7,
+  },
+})
+```
+
+## Using GraphRAG with agents
+
+Integrate the graph query tool with an agent to enable graph-based retrieval:
+
+```ts
+import { Agent } from '@mastra/core/agent'
+
+const ragAgent = new Agent({
+  id: 'rag-agent',
+  name: 'GraphRAG Agent',
+  instructions: `You are a helpful assistant that answers questions based on the provided context.
+When answering questions, use the graph query tool to find relevant information and relationships.
+Base your answers on the context provided by the tool, and clearly state if the context doesn't contain enough information.`,
+  model: 'openai/gpt-5.4',
+  tools: {
+    graphQueryTool,
+  },
+})
+```
+
+## Document processing and storage
+
+Before using graph-based retrieval, process documents into chunks and store their embeddings:
+
+```ts
+import { MDocument } from '@mastra/rag'
+import { embedMany } from 'ai'
+import { ModelRouterEmbeddingModel } from '@mastra/core/llm'
+
+// Create and chunk document
+const doc = MDocument.fromText('Your document content here...')
+
+const chunks = await doc.chunk({
+  strategy: 'recursive',
+  size: 512,
+  overlap: 50,
+  separator: '\n',
+})
+
+// Generate embeddings
+const { embeddings } = await embedMany({
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  values: chunks.map(chunk => chunk.text),
+})
+
+// Store in vector database
+const vectorStore = mastra.getVector('pgVector')
+await vectorStore.createIndex({
+  indexName: 'embeddings',
+  dimension: 1536,
+})
+await vectorStore.upsert({
+  indexName: 'embeddings',
+  vectors: embeddings,
+  metadata: chunks?.map(chunk => ({ text: chunk.text })),
+})
+```
+
+## Querying with GraphRAG
+
+Once configured, the agent can perform graph-based queries:
+
+```ts
+const query = 'What are the effects of infrastructure changes on local businesses?'
+const response = await ragAgent.generate(query)
+console.log(response.text)
+```
+
+The agent uses the graph query tool to:
+
+1. Convert the query to an embedding
+2. Find semantically similar chunks in the vector store
+3. Build a knowledge graph from related chunks
+4. Traverse the graph to find connected information
+5. Return comprehensive context for generating the response
+
+## Choosing the right threshold
+
+The threshold parameter significantly impacts retrieval quality:
+
+- **High threshold (0.8-0.9)**: Strict connections, fewer relationships, more precise but potentially incomplete results
+- **Medium threshold (0.6-0.8)**: Balanced approach, good for most use cases
+- **Low threshold (0.4-0.6)**: More connections, broader context, risk of including less relevant information
+
+Start with 0.7 and adjust based on your specific use case:
+
+```ts
+// Strict connections for precise answers
+const strictGraphTool = createGraphRAGTool({
+  vectorStoreName: 'pgVector',
+  indexName: 'embeddings',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  graphOptions: {
+    threshold: 0.85,
+  },
+})
+
+// Broader connections for exploratory queries
+const broadGraphTool = createGraphRAGTool({
+  vectorStoreName: 'pgVector',
+  indexName: 'embeddings',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  graphOptions: {
+    threshold: 0.5,
+  },
+})
+```
+
+## Combining with other retrieval methods
+
+GraphRAG can be used alongside other retrieval approaches:
+
+```ts
+import { createVectorQueryTool } from '@mastra/rag'
+
+const vectorQueryTool = createVectorQueryTool({
+  vectorStoreName: 'pgVector',
+  indexName: 'embeddings',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+})
+
+const graphQueryTool = createGraphRAGTool({
+  vectorStoreName: 'pgVector',
+  indexName: 'embeddings',
+  model: new ModelRouterEmbeddingModel('openai/text-embedding-3-small'),
+  graphOptions: {
+    threshold: 0.7,
+  },
+})
+
+const agent = new Agent({
+  id: 'rag-agent',
+  name: 'RAG Agent',
+  instructions: `Use vector search for simple fact-finding queries.
+Use graph search when you need to understand relationships or find connected information.`,
+  model: 'openai/gpt-5.4',
+  tools: {
+    vectorQueryTool,
+    graphQueryTool,
+  },
+})
+```
+
+This gives the agent flexibility to choose the appropriate retrieval method based on the query.
+
+## Reference
+
+For detailed API documentation, see:
+
+- [GraphRAG Class](https://mastra.ai/reference/rag/graph-rag)
+- [createGraphRAGTool()](https://mastra.ai/reference/tools/graph-rag-tool)

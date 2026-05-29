@@ -86,3 +86,22 @@
 - 📄 Created `docs/STATE_AND_DELTAS.md` — State/delta document: current pipeline status, 2-week changelog, gap analysis, repo-connection guide, Ruflo swarm patterns
 - ⚡ Created `.github/workflows/agentic-planner.yml` — workflow_dispatch: prompt → spec.md + task_plan.md + test_plan.md as artifacts; optional branch commit and issue creation; no auto-merge
 - 📝 Updated `AGENT_NOTES.md` — Entry 4 with session insights and handoff notes
+
+---
+
+## 2026-05-29 — Signal-Mining "AI Expertise" Drop (Research Session)
+
+- 🔎 Read/digested the ~20 "AI Expertise" documents in `skills/quarantine/` (context fork, AI
+  experts, taste distillation, self-evolving knowledge network, Symphony, Mastra, project
+  Syracuse, clarity/memory docs).
+- 📄 Created `research/findings/ai-expertise-signal-mining-2026-05-29.md` — long-form,
+  SOOG-grounded analysis: the through-line, frontier verdicts per cluster (with confidence
+  levels), strong-vs-not, Hermes mapping, an Unknown Unknowns section, and a source registry.
+- 🧩 Created `skills/discovered/soog-grounding-protocol-2026-05-29.md` — formalizes the owner's
+  SOOG protocol (cite source → cite context drawn → step-by-step reasoning; refuse vibes).
+- 🧩 Created `skills/discovered/taste-distillation-2026-05-29.md` — formalizes the owner's
+  Taste Distillation breakthrough (4 knowledge layers; contradiction mining for tacit taste;
+  portable Expert Profile loadable into a forked sub-agent).
+- ✅ Verified `ruvnet/claude-flow` (now Ruflo) README directly: Raft/Byzantine/Gossip consensus,
+  SONA/ReasoningBank self-learning, AgentDB+HNSW, trust-tier federation.
+- 📝 Updated `AGENT_NOTES.md` — Entry 5 with session insights and handoff notes.

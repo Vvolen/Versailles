@@ -223,3 +223,38 @@ Try the `agentic-planner.yml` workflow end-to-end with a simple test prompt. If 
 
 **Tags:** #harness #ruflo #devcontainer #state-docs #agentic-planner #codespaces
 **Confidence in suggestions:** high
+
+---
+
+## Entry 5 — 2026-05-29 — Copilot Coding Agent (Opus) — Signal-mine "AI Expertise" drop
+
+**Session type:** research
+**Files touched:** read most of `skills/quarantine/*` (the ~20 "AI Expertise" docs);
+created `research/findings/ai-expertise-signal-mining-2026-05-29.md`,
+`skills/discovered/soog-grounding-protocol-2026-05-29.md`,
+`skills/discovered/taste-distillation-2026-05-29.md`; updated `catalog/CHANGELOG.md`
+**Time:** ~90 min
+
+**Key insight:**
+The quarantine drop is one coherent thesis in five costumes — a self-evolving knowledge
+flywheel where the DB is the brain, skills are muscles, context-forking keeps experts cheap,
+and gap-detection is the heartbeat. Most of it is now commoditized (Anthropic subagents +
+Agent Skills progressive disclosure = the owner's "cookbook"; Ruflo README confirms Raft/
+Byzantine/Gossip consensus + SONA/ReasoningBank + AgentDB/HNSW). The genuinely differentiated
+part is **Taste Distillation via contradiction mining** — I found no clean public twin, so I
+formalized it as a skill. The owner's own **SOOG protocol** (cite source → cite context drawn
+→ step-by-step reasoning) is the other high-value artifact; formalized as a skill too.
+
+**Suggestion for next agent:**
+Consider a `taste-distill.yml` workflow_dispatch that runs the taste-distillation skill on a
+target corpus and writes an Expert Profile to `skills/discovered/`. Also wire eval→evolve so
+`recursive-research-synthesis` (stuck in `skills/evaluated/`) finally graduates.
+
+**Open question:**
+"Self-evolving skills at scale" (hot-reload + fork + many agents ⇒ emergent mastery) is the
+owner's boldest claim. Self-improving-agent research (Darwin Gödel Machine, ADAS) suggests it
+only works when archived + evaluated. Can Versailles' Evaluator gate (≥15% beat) actually
+contain an unbounded mutation loop safely, or does it need a hard generation cap?
+
+**Tags:** #research #signal-mining #taste-distillation #soog #context-forking #ruflo #hermes
+**Confidence in suggestions:** medium
