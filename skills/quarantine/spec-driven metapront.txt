@@ -1,0 +1,341 @@
+# META-PROMPT: Autonomous Agentic Infrastructure Builder
+
+## OBJECTIVE
+Create a comprehensive, executable meta-prompt that enables an AI system (single LLM or multi-agent swarm) to autonomously design, build, and deploy complete agentic infrastructure for accomplishing any specified objective in a one-shot manner.
+
+## CORE CONCEPT: THE AGENTIC HARNESS
+An "agentic harness" is a complete scaffolding system that provides an LLM or multi-agent system with everything needed to autonomously accomplish complex tasks. It comprises:
+
+- **Structured Knowledge**: Domain expertise encoded in markdown files (skills.md format)
+- **Execution Framework**: Tools, scripts, and automation capabilities
+- **Context Management**: Data sources, retrieval systems, and information architecture
+- **Specification System**: Complete, unambiguous requirements that eliminate all ambiguity
+- **Integration Layer**: Connections to tools, plugins, MCPs (Model Context Protocols), and external systems
+
+The agentic harness + comprehensive specification = autonomous capability to build anything.
+
+## YOUR TASK
+Design a meta-prompt system that enables an AI to:
+
+1. **Research and discover** the optimal approach for any given objective (using first principles thinking)
+2. **Reverse-engineer requirements** by breaking down the objective into atomic components
+3. **Build complete infrastructure** including all scaffolding, context, and capabilities needed
+4. **Produce executable systems** (not just plans) that work immediately
+5. **Scale appropriately** from simple to complex tasks while defaulting to maximum capability
+
+## CRITICAL SUCCESS CRITERIA
+
+Your meta-prompt must enable the AI to:
+
+✓ **Eliminate all ambiguity** through comprehensive specification
+✓ **Leave no stone unturned** in requirements analysis and system design
+✓ **Work autonomously** with minimal human intervention or iteration
+✓ **Handle unknowns** through systematic research and evaluation
+✓ **Produce working code and systems**, not just documentation
+✓ **Adapt architecture** based on objective complexity (single LLM vs. multi-agent swarm)
+✓ **Be immediately executable** when given any objective
+
+## REQUIRED SYSTEM CAPABILITIES
+
+### 1. Intelligent Resource Acquisition
+- Identify and gather all necessary data sources
+- Determine required expertise domains and encode them in skills.md format
+- Select appropriate tools, plugins, MCPs, and external integrations
+- Establish knowledge management and retrieval protocols
+
+### 2. Adaptive Architecture Design
+- Evaluate objective complexity to determine optimal topology:
+  - Single LLM with enhanced context
+  - Multi-agent swarm with specialized roles
+  - Orchestrator + specialist agents
+  - Hybrid approaches
+- Design information flow and context propagation
+- Specify agent roles, responsibilities, and communication protocols
+- Define decision-making hierarchies and escalation paths
+
+### 3. Complete Infrastructure Components
+- **Agentic Harness**: Core execution framework with all scaffolding
+- **Search & Retrieval**: Systems for accessing knowledge and data
+- **Context Engineering**: Mechanisms for managing and optimizing context windows
+- **Integration Layer**: Connections to tools, APIs, plugins, and MCPs
+- **Deployment Pipeline**: Automated setup and execution systems
+- **Testing Framework**: Validation and quality assurance mechanisms
+
+### 4. Robust Execution Framework
+- Task decomposition using first principles thinking
+- Decision-making protocols with clear criteria
+- Error handling, recovery, and self-correction
+- Progress tracking and validation checkpoints
+- Iterative refinement when needed
+
+## REQUIRED MULTI-PHASE STRUCTURE
+
+Design your meta-prompt as a sequence of distinct, executable phases. Each phase must include:
+
+- **Clear Objective**: What this phase accomplishes
+- **Concrete Deliverables**: Specific outputs with format specifications
+- **Success Criteria**: How to verify completion
+- **Handoff Protocol**: What gets passed to the next phase
+
+### PHASE 1: Discovery & Requirements Analysis
+
+**OBJECTIVE**: Fully understand the given objective and identify all requirements (known and unknown)
+
+**PROCESS**:
+- Analyze the stated objective using first principles thinking
+- Break down the objective into atomic components
+- Identify explicit and implicit requirements
+- Determine complexity level and scope
+- Research domain-specific considerations and best practices
+- Identify unknowns that require further investigation
+
+**DELIVERABLES**:
+- Comprehensive requirements document (no ambiguity)
+- Complexity assessment (simple/moderate/complex/enterprise)
+- List of unknowns requiring research
+- Initial resource requirements
+
+**SUCCESS CRITERIA**: All requirements are documented with zero ambiguity; complexity level is clearly determined
+
+---
+
+### PHASE 2: Research & Knowledge Acquisition
+
+**OBJECTIVE**: Resolve all unknowns and acquire necessary domain expertise
+
+**PROCESS**:
+- Conduct systematic research on identified unknowns
+- Study relevant agentic harness patterns and spec-driven development approaches
+- Identify best practices for the specific domain
+- Determine optimal architectural patterns
+- Research available tools, plugins, and MCPs
+
+**DELIVERABLES**:
+- Research findings document
+- Domain expertise encoded in skills.md format
+- Architectural pattern recommendations
+- Tool and integration recommendations
+
+**SUCCESS CRITERIA**: All unknowns are resolved; sufficient expertise is acquired to proceed with confidence
+
+---
+
+### PHASE 3: Architecture & System Design
+
+**OBJECTIVE**: Design the complete system architecture and agentic harness
+
+**PROCESS**:
+- Determine optimal topology (single LLM vs. multi-agent swarm)
+- Design system components and their interactions
+- Specify agent roles and responsibilities (if multi-agent)
+- Design context management and information flow
+- Plan integration points for tools, plugins, and MCPs
+- Create detailed implementation specification
+
+**DELIVERABLES**:
+- System architecture blueprint (diagrams and specifications)
+- Agent role definitions (if applicable)
+- Context management strategy
+- Resource manifest (all required data, tools, skills, integrations)
+- Complete implementation specification (zero ambiguity)
+
+**SUCCESS CRITERIA**: Architecture is complete, coherent, and addresses all requirements; specification eliminates all ambiguity
+
+---
+
+### PHASE 4: Infrastructure Construction
+
+**OBJECTIVE**: Build the complete agentic harness and all supporting infrastructure
+
+**PROCESS**:
+- Implement the core agentic harness/execution framework
+- Build or integrate search and retrieval systems
+- Develop context engineering mechanisms
+- Integrate all tools, plugins, and MCPs
+- Create skills.md files with encoded expertise
+- Implement communication protocols (if multi-agent)
+- Build testing and validation frameworks
+- Create deployment automation
+
+**DELIVERABLES**:
+- Functional agentic harness (executable code)
+- All skills.md files with domain expertise
+- Integrated tools and systems
+- Testing framework
+- Deployment scripts and automation
+- Complete infrastructure ready for execution
+
+**SUCCESS CRITERIA**: Infrastructure is fully functional and tested; all components integrate correctly; system is ready for deployment
+
+---
+
+### PHASE 5: Deployment & Execution
+
+**OBJECTIVE**: Deploy the system and execute against the original objective
+
+**PROCESS**:
+- Deploy all infrastructure components
+- Initialize the agentic system with the objective
+- Execute the task using the built infrastructure
+- Monitor progress and handle exceptions
+- Apply error recovery and self-correction as needed
+- Track completion against success criteria
+
+**DELIVERABLES**:
+- Deployed, running system
+- Execution logs and progress reports
+- Completed objective or clear status report
+- Performance metrics
+
+**SUCCESS CRITERIA**: System executes successfully; objective is accomplished or clear blockers are identified
+
+---
+
+### PHASE 6: Validation & Quality Assurance
+
+**OBJECTIVE**: Verify that all requirements are met and output quality is high
+
+**PROCESS**:
+- Test all system functionality
+- Verify requirements compliance
+- Validate output quality against specifications
+- Identify any gaps or deficiencies
+- Document system performance and capabilities
+
+**DELIVERABLES**:
+- Validation report with test results
+- Quality assessment
+- Gap analysis (if any)
+- Final deliverable package
+- System documentation
+
+**SUCCESS CRITERIA**: All requirements are verified as met; output quality meets or exceeds standards
+
+---
+
+### PHASE 7: Optimization & Iteration (Conditional)
+
+**OBJECTIVE**: Refine the system if gaps or failures are identified
+
+**PROCESS**:
+- Analyze identified gaps or failures
+- Determine root causes
+- Design and implement improvements
+- Redeploy and retest
+- Validate improvements
+
+**DELIVERABLES**:
+- Improved system addressing all gaps
+- Updated documentation
+- Final validation report
+
+**SUCCESS CRITERIA**: All gaps are resolved; system fully meets all requirements
+
+---
+
+## RESEARCH & EVALUATION FRAMEWORK
+
+For handling unknowns and making architectural decisions, include:
+
+### Research Protocol
+When encountering unknowns:
+1. Clearly define what is unknown
+2. Identify authoritative sources and best practices
+3. Research spec-driven development and agentic harness patterns
+4. Synthesize findings into actionable knowledge
+5. Encode expertise in skills.md format
+
+### Complexity Evaluation Criteria
+- **Simple**: Single-step tasks, minimal context, no external integrations
+- **Moderate**: Multi-step workflows, moderate context, some tool integration
+- **Complex**: Multi-phase projects, extensive context, multiple integrations
+- **Enterprise**: Large-scale systems, distributed architecture, comprehensive integration
+
+### Architecture Decision Framework
+Choose architecture based on:
+- **Single LLM**: Simple to moderate tasks, linear workflows, limited parallelization
+- **Multi-Agent Swarm**: Complex tasks requiring specialization, parallel processing, diverse expertise
+- **Orchestrator + Specialists**: Enterprise tasks requiring coordination, quality control, and specialized capabilities
+
+## OUTPUT FORMAT SPECIFICATIONS
+
+### skills.md Format
+```markdown
+# [Domain/Skill Name]
+
+## Overview
+[Brief description of the expertise domain]
+
+## Core Concepts
+- [Key concept 1]: [Explanation]
+- [Key concept 2]: [Explanation]
+
+## Best Practices
+1. [Practice 1]
+2. [Practice 2]
+
+## Common Patterns
+- [Pattern 1]: [When to use, how to implement]
+- [Pattern 2]: [When to use, how to implement]
+
+## Tools & Resources
+- [Tool 1]: [Purpose and usage]
+- [Tool 2]: [Purpose and usage]
+
+## Examples
+[Concrete examples of applying this expertise]
+```
+
+### Specification Document Format
+```markdown
+# [System/Component Name] Specification
+
+## Purpose
+[Clear statement of what this accomplishes]
+
+## Requirements
+### Functional Requirements
+1. [Requirement 1] - [Acceptance criteria]
+2. [Requirement 2] - [Acceptance criteria]
+
+### Non-Functional Requirements
+1. [Performance, scalability, etc.]
+
+## Architecture
+[Detailed design with no ambiguity]
+
+## Implementation Details
+[Specific technical specifications]
+
+## Testing Criteria
+[How to validate this works correctly]
+```
+
+## EXECUTION INSTRUCTIONS
+
+When given an objective, the AI should:
+
+1. **Begin with Phase 1** and work sequentially through all phases
+2. **Produce all specified deliverables** for each phase before proceeding
+3. **Verify success criteria** before moving to the next phase
+4. **Conduct research** whenever unknowns are encountered
+5. **Default to comprehensive infrastructure** unless simplicity is explicitly required
+6. **Build working systems**, not just plans or documentation
+7. **Eliminate all ambiguity** through detailed specifications
+8. **Self-correct and iterate** if validation reveals gaps
+
+## FINAL NOTE
+
+This meta-prompt should enable an AI to take ANY objective and autonomously:
+- Research what's needed
+- Design the optimal approach
+- Build complete infrastructure
+- Deploy and execute successfully
+- Validate the results
+
+The output should be a **working system**, not a proposal. The agentic harness should provide everything needed for autonomous execution with zero ambiguity.
+
+
+
+
+

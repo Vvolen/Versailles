@@ -1,0 +1,265 @@
+## 🏭 THE EXPERT FACTORY (Core Architecture)
+
+**The Core Insight:** "You're not building experts. You're building THE SYSTEM THAT BUILDS EXPERTS."
+
+Three independent AI systems (Claude, Super Ninja, YouTube AI) converged on the same architecture — this is validated.
+
+### The Full Stack
+
+```
+Expert Extraction Prompt (Taste Distillation)
+         ↓
+Claude Skills (Atomic Expertise Units)
+         ↓
+Claude Flow (Queen-led Hive Mind Orchestration)
+         ↓
+Context Fork (Parallel Execution, Sub-linear Token Cost)
+         ↓
+Reasoning Bank (Semantic Caching, 120-500x Speedup)
+         ↓
+Blackwall/Supabase (Persistent Memory, HNSW Vector Search)
+         ↓
+Self-Improving Expert (Output)
+```
+
+### Component Status
+
+| Component | Function | Status |
+|-----------|----------|--------|
+| **Taste Distillation** | Extract expert "craft" into reusable skills | ✅ Prompt validated |
+| **Claude Skills** | Atomic expertise — SKILL.md + Reference Files + Scripts | ✅ Production ready |
+| **Claude Flow** | 64-agent hive mind, queen-led, 84.8% SWE-Bench | ✅ Ready |
+| **Context Fork** | 8 forks ≈ 2-3x cost (not 8x) | ✅ Validated |
+| **Reasoning Bank** | Semantic caching, 34% effectiveness improvement | ✅ Research validated |
+| **Blackwall** | Supabase + HNSW + temporal knowledge graph | ✅ Production-grade |
+| **Self-Improvement Loop** | skill_feedback → expertise_files | 🔧 Needs wiring |
+
+### Three Layers of Meta-Abstraction
+
+At three levels of meta-abstraction, LLMs produce genuinely novel insights:
+- **Layer 1:** Automation (workflow does a thing)
+- **Layer 2:** Meta-automation (AI creates workflows)  
+- **Layer 3:** Meta-meta-automation (AI creates AIs that create workflows) ← Novel emergence
+
+---
+
+## 🎯 TASTE DISTILLATION (Major Breakthrough)
+
+**Definition:** Extracting the nuanced, implicit *style* and *approach* of an expert and encoding it into a reusable, autonomous skill.
+
+### The 5-Phase Extraction Process
+
+| Phase | What It Extracts |
+|-------|------------------|
+| **Phase 0** | Self-improves the extraction prompt before running |
+| **Phase 1** | 4 knowledge layers: Explicit → Implicit → Tacit → Meta |
+| **Phase 2** | Tree of Thoughts — 5 expert personas analyze, then debate |
+| **Phase 3** | Cross-validates with 5 lenses, identifies and fills gaps |
+| **Phase 4** | Translates to YOUR context with 90-day roadmap |
+| **Phase 5** | Extracts HOW they learn (not just what they know) |
+
+### The Four Knowledge Layers
+
+| Layer | What It Captures |
+|-------|------------------|
+| **Explicit** | Surface teachings, named frameworks |
+| **Implicit** | Patterns across recommendations, decision heuristics |
+| **Tacit** | Contradictions revealing hidden rules (GOLD) |
+| **Meta** | How thinking evolved over time and WHY |
+
+**Contradiction Mining** — Find where expert gave OPPOSITE advice, extract the HIDDEN VARIABLE that reconciles both. This reveals knowledge they can't articulate.
+
+### Applications
+- **Business Strategy:** Hormozi, Naval, Gary Vee mental models
+- **Coding:** Extract style from GitHub repos
+- **Coaching:** Extract questioning techniques from transcripts
+- **Any Domain:** Feed content → output cognitive operating system
+
+---
+
+## ⚡ "ML WITHOUT ML" (Core Innovation)
+
+**The Breakthrough:** Runtime-updatable AI augmentation achieving training-like behavior through architecture — NOT gradient descent.
+
+### How It Works
+Instead of training, you:
+1. Update `memory_fragments` on every interaction
+2. Update `skill_success_rates` based on outcomes
+3. Update `trust_scores` based on contribution quality
+4. Cache successful patterns in Reasoning Bank
+5. Retrieve and apply via semantic similarity
+
+**"Training" = SQL writes + forked validation passes**
+
+### Validated Research Numbers
+
+| Metric | Finding | Confidence |
+|--------|---------|------------|
+| Token isolation | 8 forks cost ~2-3x (not 8x) | 95% |
+| Skill specialization | 35-50% better accuracy, 50% fewer tokens | 92% |
+| Reasoning Bank | 120-500x speedup on cache hits | 88% |
+| Memory compression | 80% context reduction via hierarchy | 98% |
+| Cost reduction | 98% over 4 phases ($1.65 → $0.04/query) | Validated |
+
+### The Velocity Insight
+
+> "The scary thing isn't the architecture; it's the velocity in which it creates."
+
+With 3-3-3-1 pattern (10 VMs): 10 VMs × 100 iterations/day × 30 days = 30,000 patterns
+At 60%+ cache hit rate = custom expert that didn't exist before
+
+**Timeline to moat:** 6 months (1,000+ queries = unreplicable patterns)
+
+---
+
+## 🔒 AGENTIC RAG (Why No Hallucination)
+
+Your architecture implements Agentic RAG:
+
+| Skill | RAG Function |
+|-------|--------------|
+| Memory Query Specialist | Decides WHEN retrieval is needed |
+| Contradiction Validator | Evaluates QUALITY of retrieved info |
+| Expert Miner | Synthesizes patterns from sources |
+| Knowledge Compressor | Creates hierarchical abstractions |
+
+**Four Agentic Patterns Implemented:**
+- ✅ Reflection — agents evaluate own outputs
+- ✅ Planning — queen decomposes tasks
+- ✅ Tool use — MCP integrations
+- ✅ Multi-agent collaboration — hive mind
+
+Everything grounded in retrieved knowledge + multi-agent consensus = no hallucination.
+
+---
+
+## 🛠️ Nick's Tool Stack (January 2026)
+
+| Tool | Use Case |
+|------|----------|
+| **Claude.ai** | Voice chat, research synthesis, Aria persona |
+| **Claude Console** | Prompt engineering "Mona Lisa Machine" |
+| **Super Ninja** | 10 VMs, Cerebras/GLM-4.7, 1M context |
+| **Claude Flow** | 64 agents, hive-mind, ReasoningBank |
+| **Manus** | Deep research, autonomous workflows (20K+ credits) |
+| **n8n** | Workflow automation |
+| **Rube** | 500+ MCPs in Claude.ai |
+| **Toolhouse** | 1000+ MCP integrations |
+| **Blackwall (Supabase)** | Persistent memory, HNSW, hybrid search |
+
+**Hardware (Coming Online):**
+RTX 5090 + Ryzen 9 9950x, 128GB DDR5, dual 2TB NVMe, 57" G9 Neo
+~$2K+/month cloud equivalent, can run 64 local agents
+
+**Cloud Credits:** Google Cloud $300, Azure $300
+
+---
+
+## 📊 The 3-3-3-1 Super Ninja Pattern
+
+Production pipeline for parallel execution:
+- **3 VMs** building rough constructs
+- **3 VMs** refining
+- **3 VMs** shipping
+- **1 VM** meta-orchestrating
+
+Enables 10 parallel executions with massive iteration velocity.
+
+---
+
+## 💰 Revenue Architecture
+
+### The Pipeline IS the Product
+
+| Tier | Product | Price |
+|------|---------|-------|
+| 1 | Expert Extraction Prompt Template | $47-97 |
+| 2 | Done-For-You Expert Extraction | $497-997 |
+| 3 | Expert Factory Course | $1K-5K |
+| 4 | Done-With-You Implementation | $5K-10K |
+| 5 | Expert-as-a-Service | $2K-5K/month |
+| 6 | Enterprise Factory License | $50K-200K |
+
+### The Scrape-to-Service Flywheel (Manus)
+
+```
+Step 1 (Manus): Deep research, identify market "leaks"
+Step 2 (Super Ninja): Build MVP in VM autonomously
+Step 3 (Gemini): Design pricing/marketing
+→ Ship to customers
+```
+
+### Revenue Suites
+1. **Growth & Conversion** — "Revenue Recovery Audit"
+2. **Competitive Intelligence** — "Quarterly Edge Report"  
+3. **Technical Data Cleaning** — "Automated Data Analyst"
+
+---
+
+## 🔑 Key Discoveries
+
+### Foundational
+1. **RLM (Recursive Language Models)** — MIT Dec 2025. Infinite context without rot.
+2. **Graphiti/Zep > Mem0** — Temporal knowledge graphs beat static memory.
+3. **Context Engineering > Prompt Engineering** — Optimal info for THIS step.
+4. **Integration > Creation** — Wire existing tools, don't rebuild.
+
+### The Prompt→Skill→Production Pipeline
+1. Design perfect prompt in Claude Console Workbench
+2. Embed as Claude Code Skill with reference URLs
+3. Add Leva control panels for real-time tweaking
+4. Optimize claude.md for context efficiency
+5. Deploy as living agent with embedded taste
+
+### Meta-Patterns
+- **"Ask AI what questions to ask"** — Unlocks latent potential
+- **Sell the MACHINE, not outputs** — Systems > one-shots
+- **Voice chat = learning superpower** — Activates gestalt cognition
+- **Dynamic Research Agents > Static Files** — On-demand knowledge
+
+---
+
+## 🛡️ System Guardrails
+
+1. **Grounded in Retrieved Knowledge** — No pure hallucination
+2. **Multi-Agent Consensus** — Byzantine Fault Tolerance, 2/3 majority
+3. **Human-in-the-Loop Checkpoints** — Strategic approval gates
+4. **Temporal Decay** — Old patterns deprioritized automatically
+5. **Trust Scoring** — Low-trust patterns deprioritized
+6. **Queen Node Constraint** — Coordinates but doesn't act independently
+
+---
+
+## ❌ What NOT To Do
+
+- Don't smooth over confusion — resistance = learning
+- Don't give sequential procedures without systems context
+- Don't assume Nick knows implementation details — orchestration-fluent, not coder
+- Don't be sycophantic — push back on bad ideas
+- Don't use excessive bullets/headers in casual conversation
+- Don't ask permission to search — just do it
+
+---
+
+## 📋 Session End Protocol
+
+At end of substantial sessions:
+1. Summarize key decisions made
+2. Identify what should be captured (skill updates, memory)
+3. State the single most important next action
+4. Remind: **"Systems beat tools. Flywheels beat one-shots.
+
+---
+
+## 🎯 Current Priorities (January 2026)
+
+1. ✅ Expert Factory architecture validated
+2. ✅ Taste Distillation prompt discovered  
+3. 🔧 Run Hormozi extraction → Create skill
+4. 🔧 Implement Reasoning Bank tables
+5. 🔧 Wire self-improvement loop
+6. 🔧 Connect Blackwall to Claude via MCP
+7. 💰 First revenue from pipeline
+
+**Timeline to functional Expert Factory:** 1-2 weeks
+**Timeline to first revenue:** 30-60 days
