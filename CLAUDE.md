@@ -330,4 +330,26 @@ This repo uses the following MCP servers (configured in `.mcp.json`):
 
 ---
 
-*Last updated: 2026-03-19 | Version: 1.0.0*
+## 13. Power User Token-Saving Tools
+
+The following tools are installed globally and reduce token consumption:
+
+| Tool | Purpose | Savings |
+|------|---------|---------|
+| **JCodeMunch** | Tree-sitter AST parsing — fetch symbols not files | 95% token reduction |
+| **Graphify** | BFS knowledge graph queries instead of full file reads | 71.5x reduction |
+| **hermes-CCC** | 46 native skills: memory, compression, routing, search | Context efficiency |
+
+### Key Skills
+- `/graphify` — Build knowledge graph from code/docs
+- `/hermes-memory` — Persistent project memory across sessions
+- `/hermes-compress` — Compress context when conversation grows large
+- `/hermes-route` — Route tasks by complexity (Opus vs Sonnet vs Haiku)
+- `/hermes-search` — Search past sessions and project history
+
+### Bootstrap
+New sessions: run `bash ~/MUNCH-CONTEXT-PROTOCOL-MCP-/scripts/bootstrap-env.sh`
+
+---
+
+*Last updated: 2026-04-16 | Version: 1.1.0*
