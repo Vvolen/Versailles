@@ -336,7 +336,7 @@ The following tools are installed globally and reduce token consumption:
 
 | Tool | Purpose | Savings |
 |------|---------|---------|
-| **jCodeMunch** | Tree-sitter AST parsing — fetch symbols not files | 95% token reduction |
+| **JCodeMunch** | Tree-sitter AST parsing — fetch symbols not files | 95% token reduction |
 | **Graphify** | BFS knowledge graph queries instead of full file reads | 71.5x reduction |
 | **hermes-CCC** | 46 native skills: memory, compression, routing, search | Context efficiency |
 
