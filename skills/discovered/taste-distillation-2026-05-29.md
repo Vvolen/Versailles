@@ -11,7 +11,7 @@ description: >
 metadata:
   author: Versailles (mined from owner's "AI Expertise" corpus)
   version: "1.0"
-  origin: skills/quarantine "AI experts.txt" (Taste Distillation breakthrough)
+  origin: 'skills/quarantine/AI experts.txt (Taste Distillation breakthrough)'
 ---
 
 # Taste Distillation

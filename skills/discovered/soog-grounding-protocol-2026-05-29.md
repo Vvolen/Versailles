@@ -11,7 +11,7 @@ description: >
 metadata:
   author: Versailles (mined from owner's "AI Expertise" corpus)
   version: "1.0"
-  origin: skills/quarantine "Symphony docs…" + "Context for Research" + owner SOOG protocol
+  origin: 'skills/quarantine/Symphony docs_transcript_architecture .txt + skills/quarantine/Context for Research.txt + owner-stated SOOG protocol'
 ---
 
 # SOOG — Standing On the Shoulders Of Giants

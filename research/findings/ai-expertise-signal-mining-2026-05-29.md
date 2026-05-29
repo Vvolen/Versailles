@@ -124,7 +124,7 @@ For each, I give: **the claim**, **how the frontier judges it (with sources)**, 
   *in their own context window* with their own tools and system prompt, which is precisely your
   "isolated expert" idea; and **Agent Skills** (the open spec at agentskills.io that this repo's
   `SKILL_SPEC.md` already follows) use **progressive disclosure** — the model only pulls a skill's
-  full body into context when it's relevant, which is literally your "cookbook" metaphore made
+  full body into context when it's relevant, which is literally your "cookbook" metaphor made
   real. The "Copilot/Eclipse" thing you half-remembered is the same pattern: isolated sub-agents.
   **Confidence: HIGH** for subagents + skills + progressive disclosure; **MEDIUM** for the exact
   "hot reload without restart" + "once-for-hooks" details (those came from a single video
